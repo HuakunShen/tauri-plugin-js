@@ -263,6 +263,38 @@
     { name: "deno-worker", runtime: "deno", script: "deno-worker.ts" },
   ];
 
+  const binaryConfigs = [
+    { name: "bun-compiled", binary: "bun-worker", label: "bun-worker (compiled)" },
+    { name: "deno-compiled", binary: "deno-worker", label: "deno-worker (compiled)" },
+  ];
+
+  async function spawnBinary(name: string, binaryName: string) {
+    try {
+      const binaryPath = await resolve("..", "backends", "bin", binaryName);
+      const info = await spawn(name, { command: binaryPath });
+      log("system", `spawned ${name} (pid: ${info.pid}) [compiled binary]`);
+
+      onStdout(name, (data) => log("stdout", `[${name}] ${data}`));
+      onStderr(name, (data) => log("stderr", `[${name}] ${data}`));
+      onExit(name, (code) => {
+        log("exit", `[${name}] exited with code ${code}`);
+        delete channels[name];
+        channels = { ...channels };
+        refreshProcesses();
+      });
+
+      const { api } = await createChannel<Record<string, never>, BackendAPI>(
+        name,
+      );
+      channels[name] = api;
+      channels = { ...channels };
+      log("system", `RPC channel ready for ${name}`);
+      await refreshProcesses();
+    } catch (e) {
+      log("error", `failed to spawn ${name}: ${e}`);
+    }
+  }
+
   $effect(() => {
     loadRuntimes();
     refreshProcesses();
@@ -340,6 +372,26 @@
               {:else}
                 <span class="text-[10px] text-danger">not found</span>
               {/if}
+            </button>
+          {/each}
+        </div>
+      </div>
+
+      <!-- Compiled Binaries -->
+      <div class="p-4 border-b border-border border-dashed">
+        <h2
+          class="text-xs font-medium text-text-muted uppercase tracking-wider mb-3"
+        >
+          compiled binaries
+        </h2>
+        <div class="space-y-2">
+          {#each binaryConfigs as cfg}
+            <button
+              onclick={() => spawnBinary(cfg.name, cfg.binary)}
+              class="w-full px-3 py-2 text-sm text-left border border-border rounded-md transition-colors flex items-center gap-2 hover:bg-surface-hover hover:border-accent/30 cursor-pointer"
+            >
+              <span class="w-1.5 h-1.5 rounded-full bg-purple-400"></span>
+              <span class="flex-1">{cfg.label}</span>
             </button>
           {/each}
         </div>

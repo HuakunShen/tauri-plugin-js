@@ -12,6 +12,7 @@ Tauri gives you a tiny, fast, secure desktop shell — but sometimes you need a 
 - Multiple concurrent named processes with independent stdio streams
 - Runtime auto-detection (discovers installed runtimes, paths, versions)
 - Custom runtime executable paths via settings
+- Compiled binary sidecars — compile TS workers into standalone executables, no runtime needed on user machines
 - Clean shutdown on app exit
 - Multi-window support — all windows can communicate with the same backend processes
 
@@ -178,7 +179,37 @@ const sum = await api.add(5, 3);        // => 8
 const info = await api.getSystemInfo(); // => { runtime: "bun", pid: 1234, ... }
 ```
 
-### 4. Runtime detection
+### 4. Spawn a compiled binary (no runtime needed)
+
+Both Bun and Deno can compile TS workers into standalone executables. Use `command` instead of `runtime` to spawn them directly:
+
+```bash
+# Compile workers into standalone binaries
+bun build --compile --minify backends/bun-worker.ts --outfile backends/bin/bun-worker
+deno compile --allow-all --output backends/bin/deno-worker backends/deno-worker.ts
+```
+
+```typescript
+import { spawn, createChannel } from "tauri-plugin-js-api";
+import { resolve } from "@tauri-apps/api/path";
+
+// Spawn the compiled binary — no bun/deno/node needed at runtime
+const binaryPath = await resolve("..", "backends", "bin", "bun-worker");
+await spawn("my-compiled-worker", { command: binaryPath });
+
+// RPC works identically — same worker code, same API
+const { api } = await createChannel<Record<string, never>, BackendAPI>("my-compiled-worker");
+const sum = await api.add(5, 3); // => 8
+```
+
+The compiled binaries preserve stdin/stdout behavior, so kkrpc works unchanged. This is the recommended approach for production — end users don't need any JS runtime installed.
+
+For Tauri's production bundling, name binaries with the target triple (`bun-worker-aarch64-apple-darwin`) and use `externalBin` in `tauri.conf.json`:
+```json
+{ "bundle": { "externalBin": ["binaries/bun-worker"] } }
+```
+
+### 5. Runtime detection
 
 ```typescript
 import { detectRuntimes, setRuntimePath, getRuntimePaths } from "tauri-plugin-js-api";
@@ -244,4 +275,4 @@ interface SpawnConfig {
 
 ## Example App
 
-See [`examples/tauri-app/`](examples/tauri-app/) for a full working demo with all three runtimes, type-safe RPC, runtime detection, and a settings dialog.
+See [`examples/tauri-app/`](examples/tauri-app/) for a full working demo with all three runtimes, compiled binary sidecars, type-safe RPC, runtime detection, and a settings dialog.

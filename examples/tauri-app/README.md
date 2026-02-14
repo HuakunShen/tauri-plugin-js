@@ -1,6 +1,6 @@
 # Example: JS Runtime Manager
 
-A demo app for `tauri-plugin-js` showing process management, type-safe RPC, and runtime detection across Bun, Node.js, and Deno.
+A demo app for `tauri-plugin-js` showing process management, type-safe RPC, runtime detection, and compiled binary sidecars across Bun, Node.js, and Deno.
 
 ## Prerequisites
 
@@ -22,6 +22,19 @@ pnpm build
 cd examples/tauri-app
 pnpm install
 ```
+
+## Build compiled sidecars (optional)
+
+To demo the compiled binary feature, compile the Bun and Deno workers into standalone executables:
+
+```bash
+cd examples/tauri-app
+pnpm build:sidecars
+```
+
+This runs `bun build --compile` and `deno compile` on the existing worker scripts, outputting binaries to `backends/bin/`. Both Bun and Deno must be installed for this step. The compiled binaries are self-contained — they don't need a runtime installed to run.
+
+If you skip this step, the runtime-based spawn buttons still work. Clicking a compiled binary button without building first will show a clear error in the log.
 
 ## Run
 
@@ -89,6 +102,16 @@ Three spawn buttons (bun, node, deno) with live runtime detection:
 
 Clicking a button spawns the corresponding worker script (`backends/bun-worker.ts`, `backends/node-worker.mjs`, or `backends/deno-worker.ts`) as a child process managed by the plugin.
 
+### Compiled binaries section
+Two buttons for spawning pre-compiled standalone binaries:
+- Purple dot = compiled binary (always enabled, no runtime check needed)
+- `bun-worker (compiled)` — compiled from `bun-worker.ts` via `bun build --compile`
+- `deno-worker (compiled)` — compiled from `deno-worker.ts` via `deno compile`
+
+These use `config.command` (direct binary path) instead of `config.runtime`. The worker code is identical — `Bun.stdin.stream()` and `Deno.stdin.readable` work the same in compiled binaries, so kkrpc and all RPC calls work unchanged.
+
+Run `pnpm build:sidecars` to compile the binaries before using these buttons.
+
 ### Process list
 Shows all running processes with PID, restart, and kill buttons. Updates via polling.
 
@@ -122,6 +145,9 @@ examples/tauri-app/
     bun-worker.ts       # Bun worker using kkrpc BunIo
     node-worker.mjs     # Node worker using kkrpc NodeIo
     deno-worker.ts      # Deno worker using kkrpc DenoIo
+    bin/                # Compiled binaries (gitignored, built by build:sidecars)
+  scripts/
+    build-sidecars.sh   # Compiles bun-worker + deno-worker into standalone binaries
   src/
     App.svelte          # Main UI (Svelte 5, TypeScript)
     main.js             # Entry point

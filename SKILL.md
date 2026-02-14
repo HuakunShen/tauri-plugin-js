@@ -14,6 +14,7 @@ metadata:
     - kkrpc
     - electron-alternative
     - process-management
+    - compiled-sidecar
 ---
 
 # Tauri + JS Runtime Integration
@@ -30,6 +31,8 @@ Give Tauri apps full JS runtime backends (Bun, Node.js, Deno) with type-safe bid
 - User asks about kkrpc integration with Tauri
 - User wants multi-window apps where windows share backend processes
 - User needs runtime detection (which runtimes are installed, paths, versions)
+- User wants to ship a Tauri app without requiring JS runtimes on user machines (compiled sidecars)
+- User asks about `bun build --compile` or `deno compile` with Tauri
 
 ## Core Architecture
 
@@ -175,7 +178,52 @@ const { api } = await createChannel<Record<string, never>, BackendAPI>("my-worke
 const result = await api.add(5, 3);  // compile-time checked
 ```
 
-### Step 7: Runtime detection (optional)
+### Step 7: Compiled binary sidecars (no runtime on user machine)
+
+Both Bun and Deno can compile TS workers into standalone executables. The compiled binaries preserve stdin/stdout behavior, so kkrpc works unchanged.
+
+**Compile:**
+```bash
+# Bun — produces a single static binary
+bun build --compile --minify backends/bun-worker.ts --outfile backends/bin/bun-worker
+
+# Deno — produces a single static binary
+deno compile --allow-all --output backends/bin/deno-worker backends/deno-worker.ts
+```
+
+**Spawn with `command` instead of `runtime`:**
+```typescript
+import { spawn, createChannel } from "tauri-plugin-js-api";
+import { resolve } from "@tauri-apps/api/path";
+
+const binaryPath = await resolve("..", "backends", "bin", "bun-worker");
+await spawn("compiled-worker", { command: binaryPath });
+
+// RPC works identically
+const { api } = await createChannel<Record<string, never>, BackendAPI>("compiled-worker");
+await api.add(5, 3); // => 8
+```
+
+**Key points:**
+- `config.command` spawns the binary directly — no runtime resolution, no `which`, no version checks
+- The same worker TS source compiles into a binary that runs identically to the runtime-based version
+- `getSystemInfo()` still reports `runtime: "bun"` or `runtime: "deno"` — the runtime is embedded in the binary
+- For production, name binaries with the target triple: `bun-worker-aarch64-apple-darwin`
+
+**Production bundling with Tauri sidecars:**
+```bash
+# Build with target triple suffix
+TARGET=$(rustc -vV | grep host | cut -d' ' -f2)
+bun build --compile backends/bun-worker.ts --outfile src-tauri/binaries/bun-worker-$TARGET
+```
+```json
+// tauri.conf.json
+{ "bundle": { "externalBin": ["binaries/bun-worker"] } }
+```
+
+Tauri automatically appends the current platform's triple when resolving `externalBin` paths, so the binary is included in the app bundle and runs on the user's machine without any runtime installed.
+
+### Step 8: Runtime detection (optional)
 
 ```typescript
 import { detectRuntimes, setRuntimePath } from "tauri-plugin-js-api";
@@ -432,8 +480,8 @@ When using the plugin with `file:` dependency links, Vite caches the pre-bundled
 Deno workers must use `npm:kkrpc/deno` for the import specifier and `.ts` file extensions for local imports (e.g., `./shared-api.ts`).
 
 ### 8. Dev vs Prod mode
-In dev mode, spawn runtimes directly (`bun script.ts`). In production, consider:
-- **Compiled sidecar:** `bun build --compile` produces a standalone binary, use Tauri's `externalBin` config
+In dev mode, spawn runtimes directly (`bun script.ts`) or use compiled binaries via `config.command` (see Step 7 above). In production, consider:
+- **Compiled sidecar (recommended):** `bun build --compile` / `deno compile` produces a standalone binary — use `config.command` to spawn it, and Tauri's `externalBin` to bundle it. No runtime needed on user machines.
 - **Bundled JS:** `bun build --outfile main.js` produces a single file, bundle it as a Tauri resource and run with system-installed runtime
 - The Rust code should check for sidecar first, then fall back to bundled JS with system runtime
 
