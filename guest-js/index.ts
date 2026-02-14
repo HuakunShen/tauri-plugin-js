@@ -1,3 +1,4 @@
+import { type IoInterface, type IoMessage } from "kkrpc/browser";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 
@@ -40,7 +41,7 @@ export interface RuntimeInfo {
 
 export async function spawn(
   name: string,
-  config: SpawnConfig
+  config: SpawnConfig,
 ): Promise<ProcessInfo> {
   return invoke<ProcessInfo>("plugin:js|spawn", { name, config });
 }
@@ -55,9 +56,12 @@ export async function killAll(): Promise<void> {
 
 export async function restart(
   name: string,
-  config?: SpawnConfig
+  config?: SpawnConfig,
 ): Promise<ProcessInfo> {
-  return invoke<ProcessInfo>("plugin:js|restart", { name, config: config ?? null });
+  return invoke<ProcessInfo>("plugin:js|restart", {
+    name,
+    config: config ?? null,
+  });
 }
 
 export async function listProcesses(): Promise<ProcessInfo[]> {
@@ -78,7 +82,7 @@ export async function detectRuntimes(): Promise<RuntimeInfo[]> {
 
 export async function setRuntimePath(
   runtime: string,
-  path: string
+  path: string,
 ): Promise<void> {
   return invoke<void>("plugin:js|set_runtime_path", { runtime, path });
 }
@@ -91,7 +95,7 @@ export async function getRuntimePaths(): Promise<Record<string, string>> {
 
 export function onStdout(
   name: string,
-  callback: (data: string) => void
+  callback: (data: string) => void,
 ): Promise<UnlistenFn> {
   return listen<StdioEventPayload>("js-process-stdout", (event) => {
     if (event.payload.name === name) {
@@ -102,7 +106,7 @@ export function onStdout(
 
 export function onStderr(
   name: string,
-  callback: (data: string) => void
+  callback: (data: string) => void,
 ): Promise<UnlistenFn> {
   return listen<StdioEventPayload>("js-process-stderr", (event) => {
     if (event.payload.name === name) {
@@ -113,7 +117,7 @@ export function onStderr(
 
 export function onExit(
   name: string,
-  callback: (code: number | null) => void
+  callback: (code: number | null) => void,
 ): Promise<UnlistenFn> {
   return listen<ExitEventPayload>("js-process-exit", (event) => {
     if (event.payload.name === name) {
@@ -126,7 +130,7 @@ export function onExit(
 
 type MessageListener = (data: string) => void;
 
-export class JsRuntimeIo {
+export class JsRuntimeIo implements IoInterface {
   readonly name: string;
   private processName: string;
   private queue: string[] = [];
@@ -167,7 +171,7 @@ export class JsRuntimeIo {
         } else {
           this.queue.push(data);
         }
-      }
+      },
     );
   }
 
@@ -190,9 +194,11 @@ export class JsRuntimeIo {
     });
   }
 
-  on(event: "message" | "error", listener: MessageListener): void {
+  on(event: "message", listener: (message: string | IoMessage) => void): void;
+  on(event: "error", listener: (error: Error) => void): void;
+  on(event: string, listener: Function): void {
     if (event === "message") {
-      this.listeners.add(listener);
+      this.listeners.add(listener as MessageListener);
     }
   }
 
@@ -221,10 +227,10 @@ export class JsRuntimeIo {
 
 export async function createChannel<
   LocalAPI extends Record<string, any> = Record<string, never>,
-  RemoteAPI extends Record<string, any> = Record<string, any>
+  RemoteAPI extends Record<string, any> = Record<string, any>,
 >(
   processName: string,
-  localApi?: LocalAPI
+  localApi?: LocalAPI,
 ): Promise<{
   channel: any;
   api: RemoteAPI;
@@ -233,7 +239,9 @@ export async function createChannel<
   const { RPCChannel } = await import("kkrpc/browser");
   const io = new JsRuntimeIo(processName);
   await io.initialize();
-  const channel = new RPCChannel<LocalAPI, RemoteAPI>(io as any, { expose: localApi ?? ({} as LocalAPI) });
+  const channel = new RPCChannel<LocalAPI, RemoteAPI>(io, {
+    expose: localApi ?? ({} as LocalAPI),
+  });
   const api = channel.getAPI();
   return { channel, api: api as RemoteAPI, io };
 }
