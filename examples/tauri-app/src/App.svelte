@@ -16,7 +16,7 @@
   import type { RuntimeInfo, ProcessInfo } from "tauri-plugin-js-api";
   import type { BackendAPI } from "../backends/shared-api";
   import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
-  import { resolve } from "@tauri-apps/api/path";
+  import { resolve, resolveResource } from "@tauri-apps/api/path";
 
   interface LogEntry {
     type: string;
@@ -114,16 +114,32 @@
     }
   }
 
+  // Map dev source filenames to bundled resource filenames
+  const bundledNames: Record<string, string> = {
+    "bun-worker.ts": "bun-worker.js",
+    "node-worker.mjs": "node-worker.mjs",
+    "deno-worker.ts": "deno-worker.ts",
+  };
+
+  async function resolveScript(filename: string): Promise<{ script: string; cwd?: string }> {
+    if (import.meta.env.DEV) {
+      return { script: filename, cwd: await resolve("..", "backends") };
+    }
+    const bundled = bundledNames[filename] ?? filename;
+    const script = await resolveResource(`workers/${bundled}`);
+    return { script };
+  }
+
   async function spawnWorker(
     name: string,
     runtime: string,
     scriptPath: string,
   ) {
     try {
-      const cwd = await resolve("..", "backends");
+      const { script, cwd } = await resolveScript(scriptPath);
       const info = await spawn(name, {
         runtime: runtime as "bun" | "deno" | "node",
-        script: scriptPath,
+        script,
         cwd,
       });
       log("system", `spawned ${name} (pid: ${info.pid})`);
@@ -264,15 +280,14 @@
   ];
 
   const binaryConfigs = [
-    { name: "bun-compiled", binary: "bun-worker", label: "bun-worker (compiled)" },
-    { name: "deno-compiled", binary: "deno-worker", label: "deno-worker (compiled)" },
+    { name: "bun-compiled", sidecar: "bun-worker", label: "bun-worker (sidecar)" },
+    { name: "deno-compiled", sidecar: "deno-worker", label: "deno-worker (sidecar)" },
   ];
 
-  async function spawnBinary(name: string, binaryName: string) {
+  async function spawnBinary(name: string, sidecarName: string) {
     try {
-      const binaryPath = await resolve("..", "backends", "bin", binaryName);
-      const info = await spawn(name, { command: binaryPath });
-      log("system", `spawned ${name} (pid: ${info.pid}) [compiled binary]`);
+      const info = await spawn(name, { sidecar: sidecarName });
+      log("system", `spawned ${name} (pid: ${info.pid}) [sidecar]`);
 
       onStdout(name, (data) => log("stdout", `[${name}] ${data}`));
       onStderr(name, (data) => log("stderr", `[${name}] ${data}`));
@@ -377,17 +392,17 @@
         </div>
       </div>
 
-      <!-- Compiled Binaries -->
+      <!-- Sidecars -->
       <div class="p-4 border-b border-border border-dashed">
         <h2
           class="text-xs font-medium text-text-muted uppercase tracking-wider mb-3"
         >
-          compiled binaries
+          sidecars
         </h2>
         <div class="space-y-2">
           {#each binaryConfigs as cfg}
             <button
-              onclick={() => spawnBinary(cfg.name, cfg.binary)}
+              onclick={() => spawnBinary(cfg.name, cfg.sidecar)}
               class="w-full px-3 py-2 text-sm text-left border border-border rounded-md transition-colors flex items-center gap-2 hover:bg-surface-hover hover:border-accent/30 cursor-pointer"
             >
               <span class="w-1.5 h-1.5 rounded-full bg-purple-400"></span>

@@ -24,4 +24,7 @@ dist-ssr
 *.sw?
 
 # Compiled binary sidecars
-backends/bin/
+src-tauri/binaries/
+
+# Bundled worker scripts (for production resources)
+src-tauri/workers/

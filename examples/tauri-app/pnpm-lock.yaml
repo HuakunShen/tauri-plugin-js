@@ -18,8 +18,8 @@ importers:
         specifier: ^0.5.0
         version: 0.5.1(svelte@5.51.0)
       tauri-plugin-js-api:
-        specifier: file:../../
-        version: file:../..(kkrpc@0.6.7(typescript@5.9.3))
+        specifier: link:../../
+        version: link:../..
     devDependencies:
       '@sveltejs/vite-plugin-svelte':
         specifier: ^6.0.0
@@ -764,14 +764,6 @@ packages:
     resolution: {integrity: sha512-g9ljZiwki/LfxmQADO3dEY1CbpmXT5Hm2fJ+QaGKwSXUylMybePR7/67YW7jOrrvjEgL1Fmz5kzyAjWVWLlucg==}
     engines: {node: '>=6'}
 
-  tauri-plugin-js-api@file:../..:
-    resolution: {directory: ../.., type: directory}
-    peerDependencies:
-      kkrpc: '>=0.6.0'
-    peerDependenciesMeta:
-      kkrpc:
-        optional: true
-
   tinyglobby@0.2.15:
     resolution: {integrity: sha512-j2Zq4NyQYG5XMST4cbs02Ak8iJUdxRM0XI5QyxXuZOzKOINmWurp3smXu3y5wDcJrptwpSjgXHzIQxR0omXljQ==}
     engines: {node: '>=12.0.0'}
@@ -1360,12 +1352,6 @@ snapshots:
   tailwindcss@4.1.18: {}
 
   tapable@2.3.0: {}
-
-  tauri-plugin-js-api@file:../..(kkrpc@0.6.7(typescript@5.9.3)):
-    dependencies:
-      '@tauri-apps/api': 2.10.1
-    optionalDependencies:
-      kkrpc: 0.6.7(typescript@5.9.3)
 
   tinyglobby@0.2.15:
     dependencies:

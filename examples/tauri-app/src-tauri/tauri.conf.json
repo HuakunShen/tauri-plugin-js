@@ -16,16 +16,27 @@
     "windows": [
       {
         "fullscreen": false,
+        "theme": "Dark",
         "height": 700,
         "resizable": true,
         "title": "JS Runtime Manager",
-        "width": 900
+        "width": 900,
+        "zoomHotkeysEnabled": true
       }
     ]
   },
   "bundle": {
     "active": true,
     "targets": "all",
+    "externalBin": [
+      "binaries/bun-worker",
+      "binaries/deno-worker"
+    ],
+    "resources": {
+      "workers/bun-worker.js": "workers/bun-worker.js",
+      "workers/node-worker.mjs": "workers/node-worker.mjs",
+      "workers/deno-worker.ts": "workers/deno-worker.ts"
+    },
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",

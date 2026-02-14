@@ -4,15 +4,16 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "bash scripts/ensure-resources.sh && vite",
     "build": "vite build",
     "preview": "vite preview",
     "tauri": "tauri",
-    "build:sidecars": "bash scripts/build-sidecars.sh"
+    "build:sidecars": "bash scripts/build-sidecars.sh",
+    "build:workers": "bash scripts/build-workers.sh"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.0.0",
-    "tauri-plugin-js-api": "file:../../",
+    "tauri-plugin-js-api": "link:../../",
     "kkrpc": "^0.6.0",
     "mode-watcher": "^0.5.0"
   },

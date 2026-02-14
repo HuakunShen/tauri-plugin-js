@@ -8,6 +8,8 @@ pub struct SpawnConfig {
     pub runtime: Option<String>,
     /// Direct binary command (alternative to runtime)
     pub command: Option<String>,
+    /// Tauri sidecar binary name (as in externalBin config)
+    pub sidecar: Option<String>,
     /// Script file to run
     pub script: Option<String>,
     /// Additional arguments

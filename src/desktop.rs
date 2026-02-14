@@ -43,7 +43,10 @@ impl<R: Runtime> Js<R> {
         }
 
         // Build the command
-        let (program, mut args_vec) = if let Some(ref cmd) = config.command {
+        let (program, mut args_vec) = if let Some(ref sidecar) = config.sidecar {
+            let path = self.resolve_sidecar(sidecar)?;
+            (path.to_string_lossy().to_string(), Vec::new())
+        } else if let Some(ref cmd) = config.command {
             (cmd.clone(), Vec::new())
         } else if let Some(ref runtime) = config.runtime {
             match runtime.as_str() {
@@ -77,7 +80,7 @@ impl<R: Runtime> Js<R> {
             }
         } else {
             return Err(crate::Error::InvalidConfig(
-                "either 'runtime' or 'command' must be specified".to_string(),
+                "either 'sidecar', 'command', or 'runtime' must be specified".to_string(),
             ));
         };
 
@@ -212,6 +215,50 @@ impl<R: Runtime> Js<R> {
             pid,
             running: true,
         })
+    }
+
+    fn resolve_sidecar(&self, name: &str) -> crate::Result<std::path::PathBuf> {
+        let current_exe = std::env::current_exe().map_err(crate::Error::Io)?;
+        let exe_dir = current_exe.parent().ok_or_else(|| {
+            crate::Error::Io(std::io::Error::new(
+                std::io::ErrorKind::NotFound,
+                "could not determine executable directory",
+            ))
+        })?;
+
+        // Production: bundler strips the target triple
+        let candidate = exe_dir.join(name);
+        if candidate.exists() {
+            return Ok(candidate);
+        }
+
+        #[cfg(windows)]
+        {
+            let candidate = exe_dir.join(format!("{name}.exe"));
+            if candidate.exists() {
+                return Ok(candidate);
+            }
+        }
+
+        // Development: tauri dev preserves the target triple suffix
+        let triple = env!("TARGET_TRIPLE");
+        let candidate = exe_dir.join(format!("{name}-{triple}"));
+        if candidate.exists() {
+            return Ok(candidate);
+        }
+
+        #[cfg(windows)]
+        {
+            let candidate = exe_dir.join(format!("{name}-{triple}.exe"));
+            if candidate.exists() {
+                return Ok(candidate);
+            }
+        }
+
+        Err(crate::Error::Io(std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            format!("sidecar not found: {name} (looked in {})", exe_dir.display()),
+        )))
     }
 
     pub async fn kill(&self, name: String) -> crate::Result<()> {

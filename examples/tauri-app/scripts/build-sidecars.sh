@@ -3,7 +3,8 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 BACKENDS_DIR="$SCRIPT_DIR/../backends"
-BIN_DIR="$BACKENDS_DIR/bin"
+DENO_COMPILE_DIR="$SCRIPT_DIR/../../deno-compile"
+BIN_DIR="$SCRIPT_DIR/../src-tauri/binaries"
 TARGET_TRIPLE=$(rustc -vV | grep host | cut -d' ' -f2)
 
 mkdir -p "$BIN_DIR"
@@ -17,14 +18,12 @@ echo "Compiling bun-worker..."
 bun build --compile --minify \
   "$BACKENDS_DIR/bun-worker.ts" \
   --outfile "$BIN_DIR/bun-worker-$TARGET_TRIPLE"
-cp "$BIN_DIR/bun-worker-$TARGET_TRIPLE" "$BIN_DIR/bun-worker"
 
-# Deno
+# Deno — compile from separate deno-compile directory to avoid node_modules
 echo "Compiling deno-worker..."
 deno compile --allow-all \
   --output "$BIN_DIR/deno-worker-$TARGET_TRIPLE" \
-  "$BACKENDS_DIR/deno-worker.ts"
-cp "$BIN_DIR/deno-worker-$TARGET_TRIPLE" "$BIN_DIR/deno-worker"
+  "$DENO_COMPILE_DIR/main.ts"
 
 echo ""
 echo "Done:"

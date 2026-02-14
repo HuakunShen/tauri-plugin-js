@@ -12,6 +12,12 @@ const COMMANDS: &[&str] = &[
 ];
 
 fn main() {
+    // Make target triple available at compile time for sidecar resolution
+    println!(
+        "cargo:rustc-env=TARGET_TRIPLE={}",
+        std::env::var("TARGET").unwrap()
+    );
+
     tauri_plugin::Builder::new(COMMANDS)
         .android_path("android")
         .ios_path("ios")

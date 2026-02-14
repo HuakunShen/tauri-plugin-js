@@ -182,22 +182,33 @@ const result = await api.add(5, 3);  // compile-time checked
 
 Both Bun and Deno can compile TS workers into standalone executables. The compiled binaries preserve stdin/stdout behavior, so kkrpc works unchanged.
 
-**Compile:**
+**Compile with target triple suffix:**
 ```bash
-# Bun — produces a single static binary
-bun build --compile --minify backends/bun-worker.ts --outfile backends/bin/bun-worker
+TARGET=$(rustc -vV | grep host | cut -d' ' -f2)
 
-# Deno — produces a single static binary
-deno compile --allow-all --output backends/bin/deno-worker backends/deno-worker.ts
+# Bun — compile directly from the project directory
+bun build --compile --minify backends/bun-worker.ts --outfile src-tauri/binaries/bun-worker-$TARGET
+
+# Deno — MUST compile from a separate Deno package (see pitfall #8 below)
+deno compile --allow-all --output src-tauri/binaries/deno-worker-$TARGET path/to/deno-package/main.ts
 ```
 
-**Spawn with `command` instead of `runtime`:**
+**Configure Tauri to bundle sidecars** in `src-tauri/tauri.conf.json`:
+```json
+{
+  "bundle": {
+    "externalBin": ["binaries/bun-worker", "binaries/deno-worker"]
+  }
+}
+```
+
+Tauri automatically appends the current platform's triple when resolving `externalBin` paths, so the binary is included in the app bundle and runs on the user's machine without any runtime installed.
+
+**Spawn with `sidecar` instead of `runtime`:**
 ```typescript
 import { spawn, createChannel } from "tauri-plugin-js-api";
-import { resolve } from "@tauri-apps/api/path";
 
-const binaryPath = await resolve("..", "backends", "bin", "bun-worker");
-await spawn("compiled-worker", { command: binaryPath });
+await spawn("compiled-worker", { sidecar: "bun-worker" });
 
 // RPC works identically
 const { api } = await createChannel<Record<string, never>, BackendAPI>("compiled-worker");
@@ -205,23 +216,10 @@ await api.add(5, 3); // => 8
 ```
 
 **Key points:**
-- `config.command` spawns the binary directly — no runtime resolution, no `which`, no version checks
+- `config.sidecar` resolves the binary via Tauri's sidecar mechanism — looks next to the app executable, tries both plain name (production) and `{name}-{triple}` (development)
 - The same worker TS source compiles into a binary that runs identically to the runtime-based version
 - `getSystemInfo()` still reports `runtime: "bun"` or `runtime: "deno"` — the runtime is embedded in the binary
-- For production, name binaries with the target triple: `bun-worker-aarch64-apple-darwin`
-
-**Production bundling with Tauri sidecars:**
-```bash
-# Build with target triple suffix
-TARGET=$(rustc -vV | grep host | cut -d' ' -f2)
-bun build --compile backends/bun-worker.ts --outfile src-tauri/binaries/bun-worker-$TARGET
-```
-```json
-// tauri.conf.json
-{ "bundle": { "externalBin": ["binaries/bun-worker"] } }
-```
-
-Tauri automatically appends the current platform's triple when resolving `externalBin` paths, so the binary is included in the app bundle and runs on the user's machine without any runtime installed.
+- No filesystem path resolution needed on the frontend — just pass the sidecar name
 
 ### Step 8: Runtime detection (optional)
 
@@ -479,30 +477,62 @@ When using the plugin with `file:` dependency links, Vite caches the pre-bundled
 ### 7. Deno imports
 Deno workers must use `npm:kkrpc/deno` for the import specifier and `.ts` file extensions for local imports (e.g., `./shared-api.ts`).
 
-### 8. Dev vs Prod mode
-In dev mode, spawn runtimes directly (`bun script.ts`) or use compiled binaries via `config.command` (see Step 7 above). In production, consider:
-- **Compiled sidecar (recommended):** `bun build --compile` / `deno compile` produces a standalone binary — use `config.command` to spawn it, and Tauri's `externalBin` to bundle it. No runtime needed on user machines.
-- **Bundled JS:** `bun build --outfile main.js` produces a single file, bundle it as a Tauri resource and run with system-installed runtime
-- The Rust code should check for sidecar first, then fall back to bundled JS with system runtime
+### 8. `deno compile` and `node_modules`
+`deno compile` will crash with a stack overflow if run from a directory that contains `node_modules` — Deno attempts to traverse and compile the entire directory tree. **Deno worker source must live in a separate directory** that is set up as its own Deno package with a `deno.json` declaring dependencies (e.g., kkrpc).
+
+Example setup:
+```
+examples/
+  deno-compile/           # Separate Deno package — no node_modules here
+    deno.json             # { "imports": { "kkrpc/deno": "npm:kkrpc/deno" } }
+    main.ts               # Deno worker source
+    shared-api.ts         # Type definitions (copy from backends/)
+  tauri-app/
+    backends/             # Contains node_modules from npm
+      deno-worker.ts      # Used for dev mode (deno run), NOT for deno compile
+```
+
+Run `deno install` in the deno package directory to cache dependencies before compiling. The build script should compile from the separate directory:
+```bash
+deno compile --allow-all --output src-tauri/binaries/deno-worker-$TARGET ../deno-compile/main.ts
+```
+
+### 9. Dev vs Prod mode
+In dev mode, spawn runtimes directly (`bun script.ts`) or use compiled binaries via `config.sidecar` (see Step 7 above). In production, consider:
+- **Compiled sidecar (recommended):** `bun build --compile` / `deno compile` produces a standalone binary — use `config.sidecar` to spawn it, and Tauri's `externalBin` to bundle it. No runtime needed on user machines.
+- **Bundled JS scripts:** Worker scripts import `kkrpc` which needs `node_modules`. Bundle them first with `bun build --target bun/node` to inline dependencies, then add as Tauri resources via `bundle.resources`. Resolve at runtime with `resolveResource()` from `@tauri-apps/api/path`
+- The Rust code checks for sidecar first, then falls back to bundled JS with system runtime
 
 ## Production Deployment
 
 ### Option 1: Compiled sidecar (no runtime needed on user machine)
 ```bash
-bun build --compile src/backend/main.ts --outfile src-tauri/binaries/backend-$(rustc -vV | grep host | cut -d' ' -f2)
+TARGET=$(rustc -vV | grep host | cut -d' ' -f2)
+bun build --compile src/backend/main.ts --outfile src-tauri/binaries/backend-$TARGET
 ```
 Add to `tauri.conf.json`:
 ```json
 { "bundle": { "externalBin": ["binaries/backend"] } }
 ```
+Spawn with:
+```typescript
+await spawn("backend", { sidecar: "backend" });
+```
 
-### Option 2: Bundled JS (requires runtime on user machine)
+### Option 2: Bundled JS as resource (requires runtime on user machine)
+Bundle the worker to inline dependencies (kkrpc):
 ```bash
-bun build src/backend/main.ts --outfile dist-backend/main.js --target=bun
+bun build backends/worker.ts --target bun --outfile src-tauri/workers/worker.js
 ```
 Add to `tauri.conf.json`:
 ```json
-{ "bundle": { "resources": ["../dist-backend/**"] } }
+{ "bundle": { "resources": { "workers/worker.js": "workers/worker.js" } } }
+```
+Spawn with:
+```typescript
+import { resolveResource } from "@tauri-apps/api/path";
+const script = await resolveResource("workers/worker.js");
+await spawn("worker", { runtime: "bun", script });
 ```
 
 ## References

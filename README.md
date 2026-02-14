@@ -179,23 +179,34 @@ const sum = await api.add(5, 3);        // => 8
 const info = await api.getSystemInfo(); // => { runtime: "bun", pid: 1234, ... }
 ```
 
-### 4. Spawn a compiled binary (no runtime needed)
+### 4. Spawn a compiled binary sidecar (no runtime needed)
 
-Both Bun and Deno can compile TS workers into standalone executables. Use `command` instead of `runtime` to spawn them directly:
+Both Bun and Deno can compile TS workers into standalone executables. Use `sidecar` instead of `runtime` to spawn them via Tauri's sidecar resolution:
 
 ```bash
-# Compile workers into standalone binaries
-bun build --compile --minify backends/bun-worker.ts --outfile backends/bin/bun-worker
-deno compile --allow-all --output backends/bin/deno-worker backends/deno-worker.ts
+TARGET=$(rustc -vV | grep host | cut -d' ' -f2)
+
+# Bun — compile directly from the project
+bun build --compile --minify backends/bun-worker.ts --outfile src-tauri/binaries/bun-worker-$TARGET
+
+# Deno — MUST compile from a separate Deno package (see note below)
+deno compile --allow-all --output src-tauri/binaries/deno-worker-$TARGET path/to/deno-package/main.ts
+```
+
+> **Important: `deno compile` and `node_modules`**
+>
+> `deno compile` will crash with a stack overflow if run from a directory that contains `node_modules` — it attempts to traverse and compile everything in the directory tree. **Deno worker source must live in a separate directory** set up as a standalone Deno package (with its own `deno.json` listing dependencies like kkrpc). See [the example app](examples/tauri-app/) for the full setup using `examples/deno-compile/`.
+
+Add `externalBin` to `src-tauri/tauri.conf.json` so Tauri bundles the sidecars:
+```json
+{ "bundle": { "externalBin": ["binaries/bun-worker", "binaries/deno-worker"] } }
 ```
 
 ```typescript
 import { spawn, createChannel } from "tauri-plugin-js-api";
-import { resolve } from "@tauri-apps/api/path";
 
-// Spawn the compiled binary — no bun/deno/node needed at runtime
-const binaryPath = await resolve("..", "backends", "bin", "bun-worker");
-await spawn("my-compiled-worker", { command: binaryPath });
+// Spawn the sidecar — no bun/deno/node needed at runtime
+await spawn("my-compiled-worker", { sidecar: "bun-worker" });
 
 // RPC works identically — same worker code, same API
 const { api } = await createChannel<Record<string, never>, BackendAPI>("my-compiled-worker");
@@ -204,12 +215,43 @@ const sum = await api.add(5, 3); // => 8
 
 The compiled binaries preserve stdin/stdout behavior, so kkrpc works unchanged. This is the recommended approach for production — end users don't need any JS runtime installed.
 
-For Tauri's production bundling, name binaries with the target triple (`bun-worker-aarch64-apple-darwin`) and use `externalBin` in `tauri.conf.json`:
-```json
-{ "bundle": { "externalBin": ["binaries/bun-worker"] } }
+The plugin resolves sidecars by looking next to the app executable, trying both plain names (production) and target-triple-suffixed names (development).
+
+### 5. Bundle scripts as resources (for runtime-based spawning in production)
+
+Worker scripts that import `kkrpc` need `node_modules` at runtime. In production, bundle them into self-contained JS files first:
+
+```bash
+# Bundle for bun target (inlines kkrpc dependency)
+bun build backends/bun-worker.ts --target bun --outfile src-tauri/workers/bun-worker.js
+
+# Bundle for node target
+bun build backends/node-worker.mjs --target node --outfile src-tauri/workers/node-worker.mjs
 ```
 
-### 5. Runtime detection
+Then add the bundled files as Tauri resources in `tauri.conf.json`:
+```json
+{
+  "bundle": {
+    "resources": {
+      "workers/bun-worker.js": "workers/bun-worker.js",
+      "workers/node-worker.mjs": "workers/node-worker.mjs"
+    }
+  }
+}
+```
+
+Resolve the script path at runtime:
+```typescript
+import { resolveResource } from "@tauri-apps/api/path";
+
+const script = await resolveResource("workers/bun-worker.js");
+await spawn("my-worker", { runtime: "bun", script });
+```
+
+Note: Deno workers use `npm:kkrpc/deno` which Deno resolves natively — no bundling needed, just copy the source file.
+
+### 6. Runtime detection
 
 ```typescript
 import { detectRuntimes, setRuntimePath, getRuntimePaths } from "tauri-plugin-js-api";
@@ -258,7 +300,8 @@ const paths = await getRuntimePaths();
 ```typescript
 interface SpawnConfig {
   runtime?: "bun" | "deno" | "node";  // Managed runtime
-  command?: string;                     // Or direct binary path
+  command?: string;                     // Direct binary path
+  sidecar?: string;                     // Tauri sidecar binary name (as in externalBin)
   script?: string;                      // Script file to run
   args?: string[];                      // Additional arguments
   cwd?: string;                         // Working directory

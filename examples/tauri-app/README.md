@@ -32,9 +32,22 @@ cd examples/tauri-app
 pnpm build:sidecars
 ```
 
-This runs `bun build --compile` and `deno compile` on the existing worker scripts, outputting binaries to `backends/bin/`. Both Bun and Deno must be installed for this step. The compiled binaries are self-contained — they don't need a runtime installed to run.
+This runs `bun build --compile` on the bun worker and `deno compile` on the deno worker, outputting binaries to `src-tauri/binaries/` with target-triple suffixes. Both Bun and Deno must be installed for this step. The compiled binaries are self-contained — they don't need a runtime installed to run.
 
-If you skip this step, the runtime-based spawn buttons still work. Clicking a compiled binary button without building first will show a clear error in the log.
+**Note on Deno compilation:** `deno compile` crashes with a stack overflow if run from a directory containing `node_modules` — it tries to traverse and compile everything. The deno worker source lives in a separate Deno package at `examples/deno-compile/` with its own `deno.json` that declares kkrpc as a dependency. The build script compiles from there instead of from `backends/`.
+
+If you skip this step, the runtime-based spawn buttons still work. Clicking a sidecar button without building first will show a clear error in the log.
+
+## Bundle worker scripts (for production)
+
+For production builds, worker scripts need to be bundled into self-contained JS files (since `node_modules` won't be available):
+
+```bash
+cd examples/tauri-app
+pnpm build:workers
+```
+
+This bundles `bun-worker.ts` and `node-worker.mjs` with kkrpc inlined into `src-tauri/workers/`. In dev mode this isn't needed — workers run from source with `node_modules` available.
 
 ## Run
 
@@ -102,13 +115,13 @@ Three spawn buttons (bun, node, deno) with live runtime detection:
 
 Clicking a button spawns the corresponding worker script (`backends/bun-worker.ts`, `backends/node-worker.mjs`, or `backends/deno-worker.ts`) as a child process managed by the plugin.
 
-### Compiled binaries section
-Two buttons for spawning pre-compiled standalone binaries:
-- Purple dot = compiled binary (always enabled, no runtime check needed)
-- `bun-worker (compiled)` — compiled from `bun-worker.ts` via `bun build --compile`
-- `deno-worker (compiled)` — compiled from `deno-worker.ts` via `deno compile`
+### Sidecars section
+Two buttons for spawning pre-compiled standalone binaries via Tauri's sidecar mechanism:
+- Purple dot = sidecar binary (always enabled, no runtime check needed)
+- `bun-worker (sidecar)` — compiled from `bun-worker.ts` via `bun build --compile`
+- `deno-worker (sidecar)` — compiled from `deno-worker.ts` via `deno compile`
 
-These use `config.command` (direct binary path) instead of `config.runtime`. The worker code is identical — `Bun.stdin.stream()` and `Deno.stdin.readable` work the same in compiled binaries, so kkrpc and all RPC calls work unchanged.
+These use `config.sidecar` (Tauri sidecar resolution) instead of `config.runtime`. The plugin resolves sidecars by looking next to the app executable, trying both plain names (production) and target-triple-suffixed names (development). The worker code is identical — `Bun.stdin.stream()` and `Deno.stdin.readable` work the same in compiled binaries, so kkrpc and all RPC calls work unchanged.
 
 Run `pnpm build:sidecars` to compile the binaries before using these buttons.
 
@@ -139,23 +152,30 @@ Click "+ window" to open another instance of the app. All windows share the same
 ## Project structure
 
 ```
-examples/tauri-app/
-  backends/
-    shared-api.ts       # BackendAPI type definition (shared between frontend + workers)
-    bun-worker.ts       # Bun worker using kkrpc BunIo
-    node-worker.mjs     # Node worker using kkrpc NodeIo
-    deno-worker.ts      # Deno worker using kkrpc DenoIo
-    bin/                # Compiled binaries (gitignored, built by build:sidecars)
-  scripts/
-    build-sidecars.sh   # Compiles bun-worker + deno-worker into standalone binaries
-  src/
-    App.svelte          # Main UI (Svelte 5, TypeScript)
-    main.js             # Entry point
-    app.css             # Tailwind + theme tokens
-  src-tauri/
-    src/lib.rs          # Tauri app setup with plugin registration
-    capabilities/       # Permissions (js:default, core:webview, etc.)
-    tauri.conf.json     # App config
+examples/
+  deno-compile/
+    deno.json           # Deno package config with kkrpc dependency
+    main.ts             # Deno worker source (compiled from here to avoid node_modules)
+    shared-api.ts       # BackendAPI type (copy for Deno's import resolution)
+  tauri-app/
+    backends/
+      shared-api.ts     # BackendAPI type definition (shared between frontend + workers)
+      bun-worker.ts     # Bun worker using kkrpc BunIo
+      node-worker.mjs   # Node worker using kkrpc NodeIo
+      deno-worker.ts    # Deno worker using kkrpc DenoIo (dev mode only)
+    scripts/
+      build-sidecars.sh # Compiles bun-worker + deno-worker into standalone binaries
+      build-workers.sh  # Bundles worker scripts with kkrpc inlined for production
+    src/
+      App.svelte        # Main UI (Svelte 5, TypeScript)
+      main.js           # Entry point
+      app.css           # Tailwind + theme tokens
+    src-tauri/
+      binaries/         # Compiled sidecars (gitignored, built by build:sidecars)
+      workers/          # Bundled worker scripts (gitignored, built by build:workers)
+      src/lib.rs        # Tauri app setup with plugin registration
+      capabilities/     # Permissions (js:default, core:webview, etc.)
+      tauri.conf.json   # App config (externalBin + resources)
 ```
 
 ## Troubleshooting
