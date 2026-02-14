@@ -69,9 +69,7 @@ Add to your `src-tauri/Cargo.toml`:
 
 ```toml
 [dependencies]
-tauri-plugin-js = { path = "../path/to/tauri-plugin-js" }
-# or from git:
-# tauri-plugin-js = { git = "https://github.com/user/tauri-plugin-js" }
+tauri-plugin-js = "0.1"
 ```
 
 Register in `src-tauri/src/lib.rs`:

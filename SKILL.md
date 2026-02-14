@@ -55,7 +55,7 @@ The plugin handles process management, stdio relay, event emission, and provides
 **Rust** — add to `src-tauri/Cargo.toml`:
 ```toml
 [dependencies]
-tauri-plugin-js = { path = "../path/to/tauri-plugin-js" }
+tauri-plugin-js = "0.1"
 ```
 
 **Frontend** — install npm packages:
