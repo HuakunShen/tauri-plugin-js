@@ -1,0 +1,13 @@
+# Automatically generated - DO NOT EDIT!
+
+"$schema" = "../../schemas/schema.json"
+
+[[permission]]
+identifier = "allow-set-runtime-path"
+description = "Enables the set_runtime_path command without any pre-configured scope."
+commands.allow = ["set_runtime_path"]
+
+[[permission]]
+identifier = "deny-set-runtime-path"
+description = "Denies the set_runtime_path command without any pre-configured scope."
+commands.deny = ["set_runtime_path"]

@@ -1,0 +1,3 @@
+[submodule "vendors/kkrpc"]
+	path = vendors/kkrpc
+	url = https://github.com/kunkunsh/kkrpc.git

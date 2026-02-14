@@ -5,6 +5,11 @@ import typescript from '@rollup/plugin-typescript'
 
 const pkg = JSON.parse(readFileSync(join(cwd(), 'package.json'), 'utf8'))
 
+const deps = [
+  ...Object.keys(pkg.dependencies || {}),
+  ...Object.keys(pkg.peerDependencies || {}),
+]
+
 export default {
   input: 'guest-js/index.ts',
   output: [
@@ -23,9 +28,5 @@ export default {
       declarationDir: dirname(pkg.exports.import)
     })
   ],
-  external: [
-    /^@tauri-apps\/api/,
-    ...Object.keys(pkg.dependencies || {}),
-    ...Object.keys(pkg.peerDependencies || {})
-  ]
+  external: (id) => /^@tauri-apps\//.test(id) || deps.some(dep => id === dep || id.startsWith(dep + '/'))
 }

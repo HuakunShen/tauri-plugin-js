@@ -16,10 +16,10 @@
     "windows": [
       {
         "fullscreen": false,
-        "height": 600,
+        "height": 700,
         "resizable": true,
-        "title": "tauri-app",
-        "width": 800
+        "title": "JS Runtime Manager",
+        "width": 900
       }
     ]
   },

@@ -1,3 +1,14 @@
 [default]
 description = "Default permissions for the plugin"
-permissions = ["allow-ping"]
+permissions = [
+    "allow-spawn",
+    "allow-kill",
+    "allow-kill-all",
+    "allow-restart",
+    "allow-list-processes",
+    "allow-get-status",
+    "allow-write-stdin",
+    "allow-detect-runtimes",
+    "allow-set-runtime-path",
+    "allow-get-runtime-paths",
+]

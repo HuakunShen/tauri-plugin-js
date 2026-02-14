@@ -1,0 +1,13 @@
+# Automatically generated - DO NOT EDIT!
+
+"$schema" = "../../schemas/schema.json"
+
+[[permission]]
+identifier = "allow-write-stdin"
+description = "Enables the write_stdin command without any pre-configured scope."
+commands.allow = ["write_stdin"]
+
+[[permission]]
+identifier = "deny-write-stdin"
+description = "Denies the write_stdin command without any pre-configured scope."
+commands.deny = ["write_stdin"]
