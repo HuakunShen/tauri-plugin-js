@@ -1,0 +1,210 @@
+{
+  "version": "2026-02-25",
+  "last_commit": "7ce9f99b9eba05a1c83492e0059bcd61dba391ad",
+  "knowledge_relations": [
+    {
+      "id": 1,
+      "source_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+      "target_id": "b2c3d4e5-f6a7-8901-bcde-f12345678901",
+      "source_type": "WIKI_ITEM",
+      "target_type": "WIKI_ITEM",
+      "relationship_type": "PARENT_CHILD",
+      "extra": "Wiki parent-child relationship: System Overview -> Architecture",
+      "gmt_create": "2026-02-25T06:07:00.000000+08:00",
+      "gmt_modified": "2026-02-25T06:07:00.000000+08:00"
+    },
+    {
+      "id": 2,
+      "source_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+      "target_id": "c3d4e5f6-a7b8-9012-cdef-123456789012",
+      "source_type": "WIKI_ITEM",
+      "target_type": "WIKI_ITEM",
+      "relationship_type": "PARENT_CHILD",
+      "extra": "Wiki parent-child relationship: System Overview -> Services",
+      "gmt_create": "2026-02-25T06:07:00.000000+08:00",
+      "gmt_modified": "2026-02-25T06:07:00.000000+08:00"
+    },
+    {
+      "id": 3,
+      "source_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+      "target_id": "d4e5f6a7-b8c9-0123-def1-234567890123",
+      "source_type": "WIKI_ITEM",
+      "target_type": "WIKI_ITEM",
+      "relationship_type": "PARENT_CHILD",
+      "extra": "Wiki parent-child relationship: System Overview -> Development",
+      "gmt_create": "2026-02-25T06:07:00.000000+08:00",
+      "gmt_modified": "2026-02-25T06:07:00.000000+08:00"
+    },
+    {
+      "id": 4,
+      "source_id": "b2c3d4e5-f6a7-8901-bcde-f12345678901",
+      "target_id": "e5f6a7b8-c9d0-1234-ef12-345678901234",
+      "source_type": "WIKI_ITEM",
+      "target_type": "WIKI_ITEM",
+      "relationship_type": "PARENT_CHILD",
+      "extra": "Wiki parent-child relationship: Architecture -> Architecture Overview",
+      "gmt_create": "2026-02-25T06:07:00.000000+08:00",
+      "gmt_modified": "2026-02-25T06:07:00.000000+08:00"
+    },
+    {
+      "id": 5,
+      "source_id": "b2c3d4e5-f6a7-8901-bcde-f12345678901",
+      "target_id": "f6a7b8c9-d0e1-2345-f123-456789012345",
+      "source_type": "WIKI_ITEM",
+      "target_type": "WIKI_ITEM",
+      "relationship_type": "PARENT_CHILD",
+      "extra": "Wiki parent-child relationship: Architecture -> Rust Plugin",
+      "gmt_create": "2026-02-25T06:07:00.000000+08:00",
+      "gmt_modified": "2026-02-25T06:07:00.000000+08:00"
+    },
+    {
+      "id": 6,
+      "source_id": "b2c3d4e5-f6a7-8901-bcde-f12345678901",
+      "target_id": "a7b8c9d0-e1f2-3456-1234-567890123456",
+      "source_type": "WIKI_ITEM",
+      "target_type": "WIKI_ITEM",
+      "relationship_type": "PARENT_CHILD",
+      "extra": "Wiki parent-child relationship: Architecture -> Frontend API",
+      "gmt_create": "2026-02-25T06:07:00.000000+08:00",
+      "gmt_modified": "2026-02-25T06:07:00.000000+08:00"
+    },
+    {
+      "id": 7,
+      "source_id": "b2c3d4e5-f6a7-8901-bcde-f12345678901",
+      "target_id": "b8c9d0e1-f2a3-4567-2345-678901234567",
+      "source_type": "WIKI_ITEM",
+      "target_type": "WIKI_ITEM",
+      "relationship_type": "PARENT_CHILD",
+      "extra": "Wiki parent-child relationship: Architecture -> RPC Communication",
+      "gmt_create": "2026-02-25T06:07:00.000000+08:00",
+      "gmt_modified": "2026-02-25T06:07:00.000000+08:00"
+    },
+    {
+      "id": 8,
+      "source_id": "c3d4e5f6-a7b8-9012-cdef-123456789012",
+      "target_id": "c9d0e1f2-a3b4-5678-3456-789012345678",
+      "source_type": "WIKI_ITEM",
+      "target_type": "WIKI_ITEM",
+      "relationship_type": "PARENT_CHILD",
+      "extra": "Wiki parent-child relationship: Services -> Process Management",
+      "gmt_create": "2026-02-25T06:07:00.000000+08:00",
+      "gmt_modified": "2026-02-25T06:07:00.000000+08:00"
+    },
+    {
+      "id": 9,
+      "source_id": "c3d4e5f6-a7b8-9012-cdef-123456789012",
+      "target_id": "d0e1f2a3-b4c5-6789-4567-890123456789",
+      "source_type": "WIKI_ITEM",
+      "target_type": "WIKI_ITEM",
+      "relationship_type": "PARENT_CHILD",
+      "extra": "Wiki parent-child relationship: Services -> Runtime Detection",
+      "gmt_create": "2026-02-25T06:07:00.000000+08:00",
+      "gmt_modified": "2026-02-25T06:07:00.000000+08:00"
+    },
+    {
+      "id": 10,
+      "source_id": "c3d4e5f6-a7b8-9012-cdef-123456789012",
+      "target_id": "e1f2a3b4-c5d6-7890-5678-901234567890",
+      "source_type": "WIKI_ITEM",
+      "target_type": "WIKI_ITEM",
+      "relationship_type": "PARENT_CHILD",
+      "extra": "Wiki parent-child relationship: Services -> Sidecar Support",
+      "gmt_create": "2026-02-25T06:07:00.000000+08:00",
+      "gmt_modified": "2026-02-25T06:07:00.000000+08:00"
+    },
+    {
+      "id": 11,
+      "source_id": "d4e5f6a7-b8c9-0123-def1-234567890123",
+      "target_id": "f2a3b4c5-d6e7-8901-6789-012345678901",
+      "source_type": "WIKI_ITEM",
+      "target_type": "WIKI_ITEM",
+      "relationship_type": "PARENT_CHILD",
+      "extra": "Wiki parent-child relationship: Development -> Development Guide",
+      "gmt_create": "2026-02-25T06:07:00.000000+08:00",
+      "gmt_modified": "2026-02-25T06:07:00.000000+08:00"
+    },
+    {
+      "id": 12,
+      "source_id": "d4e5f6a7-b8c9-0123-def1-234567890123",
+      "target_id": "a3b4c5d6-e7f8-9012-7890-123456789012",
+      "source_type": "WIKI_ITEM",
+      "target_type": "WIKI_ITEM",
+      "relationship_type": "PARENT_CHILD",
+      "extra": "Wiki parent-child relationship: Development -> Example Application",
+      "gmt_create": "2026-02-25T06:07:00.000000+08:00",
+      "gmt_modified": "2026-02-25T06:07:00.000000+08:00"
+    }
+  ],
+  "wiki_items": [
+    {
+      "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+      "title": "System Overview",
+      "path": "content/System Overview.md"
+    },
+    {
+      "id": "f1e2d3c4-b5a6-7890-fedc-ba0987654321",
+      "title": "Getting Started Guide",
+      "path": "content/Getting Started Guide.md"
+    },
+    {
+      "id": "b2c3d4e5-f6a7-8901-bcde-f12345678901",
+      "title": "Architecture",
+      "path": "content/Architecture"
+    },
+    {
+      "id": "e5f6a7b8-c9d0-1234-ef12-345678901234",
+      "title": "Architecture Overview",
+      "path": "content/Architecture/Architecture Overview.md"
+    },
+    {
+      "id": "f6a7b8c9-d0e1-2345-f123-456789012345",
+      "title": "Rust Plugin",
+      "path": "content/Architecture/Rust Plugin.md"
+    },
+    {
+      "id": "a7b8c9d0-e1f2-3456-1234-567890123456",
+      "title": "Frontend API",
+      "path": "content/Architecture/Frontend API.md"
+    },
+    {
+      "id": "b8c9d0e1-f2a3-4567-2345-678901234567",
+      "title": "RPC Communication",
+      "path": "content/Architecture/RPC Communication.md"
+    },
+    {
+      "id": "c3d4e5f6-a7b8-9012-cdef-123456789012",
+      "title": "Services",
+      "path": "content/Services"
+    },
+    {
+      "id": "c9d0e1f2-a3b4-5678-3456-789012345678",
+      "title": "Process Management",
+      "path": "content/Services/Process Management.md"
+    },
+    {
+      "id": "d0e1f2a3-b4c5-6789-4567-890123456789",
+      "title": "Runtime Detection",
+      "path": "content/Services/Runtime Detection.md"
+    },
+    {
+      "id": "e1f2a3b4-c5d6-7890-5678-901234567890",
+      "title": "Sidecar Support",
+      "path": "content/Services/Sidecar Support.md"
+    },
+    {
+      "id": "d4e5f6a7-b8c9-0123-def1-234567890123",
+      "title": "Development",
+      "path": "content/Development"
+    },
+    {
+      "id": "f2a3b4c5-d6e7-8901-6789-012345678901",
+      "title": "Development Guide",
+      "path": "content/Development/Development Guide.md"
+    },
+    {
+      "id": "a3b4c5d6-e7f8-9012-7890-123456789012",
+      "title": "Example Application",
+      "path": "content/Development/Example Application.md"
+    }
+  ]
+}
