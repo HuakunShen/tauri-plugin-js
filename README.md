@@ -321,3 +321,31 @@ interface SpawnConfig {
 ## Example App
 
 See [`examples/tauri-app/`](examples/tauri-app/) for a full working demo with all three runtimes, compiled binary sidecars, type-safe RPC, runtime detection, and a settings dialog.
+
+## Development
+
+### Build & Test
+
+```bash
+pnpm install --frozen-lockfile
+pnpm build
+cargo check --locked --all-targets
+cargo test --locked --all-targets
+```
+
+The GitHub Actions workflow at `.github/workflows/ci.yml` runs the same commands on every push and pull request.
+
+### Manual Smoke Test
+
+```bash
+pnpm build
+cd examples/tauri-app
+pnpm install --frozen-lockfile
+pnpm tauri dev
+```
+
+The example app spawns Bun/Node/Deno workers, demonstrates typed RPC via kkrpc, and exercises runtime detection, multi-window support, and clean shutdown. To exercise compiled sidecar binaries, install Bun and Deno, then run `pnpm build:sidecars` from `examples/tauri-app` before starting the app.
+
+### Contributing
+
+See [CONTRIBUTING.md](./CONTRIBUTING.md) for the full setup, verification, and release checklist. The Rust crate and npm package are not published automatically.

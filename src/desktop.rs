@@ -32,6 +32,72 @@ pub fn init<R: Runtime, C: DeserializeOwned>(
     })
 }
 
+fn build_spawn_program(config: &SpawnConfig) -> crate::Result<(String, Vec<String>)> {
+    if let Some(ref command) = config.command {
+        return Ok((command.clone(), config.args.clone().unwrap_or_default()));
+    }
+
+    let runtime = config.runtime.as_ref().ok_or_else(|| {
+        crate::Error::InvalidConfig(
+            "either 'sidecar', 'command', or 'runtime' must be specified".to_string(),
+        )
+    })?;
+
+    let mut args = match runtime.as_str() {
+        "bun" | "node" => Vec::new(),
+        "deno" => vec!["run".to_string(), "-A".to_string()],
+        other => {
+            return Err(crate::Error::InvalidConfig(format!(
+                "unknown runtime: {}",
+                other
+            )));
+        }
+    };
+
+    if let Some(ref script) = config.script {
+        args.push(script.clone());
+    }
+    if let Some(ref extra) = config.args {
+        args.extend(extra.iter().cloned());
+    }
+
+    Ok((runtime.clone(), args))
+}
+
+fn build_sidecar_spawn_program(program: String, config: &SpawnConfig) -> (String, Vec<String>) {
+    (program, config.args.clone().unwrap_or_default())
+}
+
+fn sidecar_candidate_paths(
+    exe_dir: &std::path::Path,
+    name: &str,
+    target_triple: &str,
+) -> Vec<std::path::PathBuf> {
+    let mut candidates = vec![exe_dir.join(name)];
+
+    #[cfg(windows)]
+    candidates.push(exe_dir.join(format!("{name}.exe")));
+
+    candidates.push(exe_dir.join(format!("{name}-{target_triple}")));
+
+    #[cfg(windows)]
+    candidates.push(exe_dir.join(format!("{name}-{target_triple}.exe")));
+
+    candidates
+}
+
+fn resolve_program_with_override(
+    runtime: Option<&str>,
+    program: String,
+    overrides: &std::collections::HashMap<String, String>,
+) -> String {
+    if let Some(name) = runtime {
+        return overrides.get(name).cloned().unwrap_or(program);
+    }
+
+    program
+}
+
 impl<R: Runtime> Js<R> {
     pub async fn spawn(&self, name: String, config: SpawnConfig) -> crate::Result<ProcessInfo> {
         // Check if process already exists
@@ -43,60 +109,17 @@ impl<R: Runtime> Js<R> {
         }
 
         // Build the command
-        let (program, mut args_vec) = if let Some(ref sidecar) = config.sidecar {
+        let (program, args_vec) = if let Some(ref sidecar) = config.sidecar {
             let path = self.resolve_sidecar(sidecar)?;
-            (path.to_string_lossy().to_string(), Vec::new())
-        } else if let Some(ref cmd) = config.command {
-            (cmd.clone(), Vec::new())
-        } else if let Some(ref runtime) = config.runtime {
-            match runtime.as_str() {
-                "bun" => {
-                    let mut a = Vec::new();
-                    if let Some(ref script) = config.script {
-                        a.push(script.clone());
-                    }
-                    ("bun".to_string(), a)
-                }
-                "deno" => {
-                    let mut a = vec!["run".to_string(), "-A".to_string()];
-                    if let Some(ref script) = config.script {
-                        a.push(script.clone());
-                    }
-                    ("deno".to_string(), a)
-                }
-                "node" => {
-                    let mut a = Vec::new();
-                    if let Some(ref script) = config.script {
-                        a.push(script.clone());
-                    }
-                    ("node".to_string(), a)
-                }
-                other => {
-                    return Err(crate::Error::InvalidConfig(format!(
-                        "unknown runtime: {}",
-                        other
-                    )));
-                }
-            }
+            build_sidecar_spawn_program(path.to_string_lossy().to_string(), &config)
         } else {
-            return Err(crate::Error::InvalidConfig(
-                "either 'sidecar', 'command', or 'runtime' must be specified".to_string(),
-            ));
+            build_spawn_program(&config)?
         };
-
-        // Append extra args
-        if let Some(ref extra) = config.args {
-            args_vec.extend(extra.iter().cloned());
-        }
 
         // Apply custom runtime path override if configured
         let program = {
             let custom_paths = self.runtime_paths.lock().await;
-            if let Some(ref runtime) = config.runtime {
-                custom_paths.get(runtime).cloned().unwrap_or(program)
-            } else {
-                program
-            }
+            resolve_program_with_override(config.runtime.as_deref(), program, &custom_paths)
         };
 
         let mut cmd = Command::new(&program);
@@ -226,33 +249,12 @@ impl<R: Runtime> Js<R> {
             ))
         })?;
 
-        // Production: bundler strips the target triple
-        let candidate = exe_dir.join(name);
-        if candidate.exists() {
-            return Ok(candidate);
-        }
-
-        #[cfg(windows)]
+        if let Some(candidate) =
+            sidecar_candidate_paths(exe_dir, name, env!("TARGET_TRIPLE"))
+                .into_iter()
+                .find(|candidate| candidate.exists())
         {
-            let candidate = exe_dir.join(format!("{name}.exe"));
-            if candidate.exists() {
-                return Ok(candidate);
-            }
-        }
-
-        // Development: tauri dev preserves the target triple suffix
-        let triple = env!("TARGET_TRIPLE");
-        let candidate = exe_dir.join(format!("{name}-{triple}"));
-        if candidate.exists() {
             return Ok(candidate);
-        }
-
-        #[cfg(windows)]
-        {
-            let candidate = exe_dir.join(format!("{name}-{triple}.exe"));
-            if candidate.exists() {
-                return Ok(candidate);
-            }
         }
 
         Err(crate::Error::Io(std::io::Error::new(
@@ -413,5 +415,165 @@ impl<R: Runtime> Js<R> {
     pub async fn get_runtime_paths(&self) -> crate::Result<HashMap<String, String>> {
         let paths = self.runtime_paths.lock().await;
         Ok(paths.clone())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn spawn_config() -> SpawnConfig {
+        SpawnConfig {
+            runtime: None,
+            command: None,
+            sidecar: None,
+            script: None,
+            args: None,
+            cwd: None,
+            env: None,
+        }
+    }
+
+    #[test]
+    fn builds_bun_command_with_script_and_extra_args() {
+        let mut config = spawn_config();
+        config.runtime = Some("bun".to_string());
+        config.script = Some("worker.ts".to_string());
+        config.args = Some(vec!["--watch".to_string()]);
+
+        let (program, args) = build_spawn_program(&config).unwrap();
+
+        assert_eq!(program, "bun");
+        assert_eq!(args, vec!["worker.ts", "--watch"]);
+    }
+
+    #[test]
+    fn builds_bun_command_without_script() {
+        let mut config = spawn_config();
+        config.runtime = Some("bun".to_string());
+
+        let (program, args) = build_spawn_program(&config).unwrap();
+
+        assert_eq!(program, "bun");
+        assert!(args.is_empty());
+    }
+
+    #[test]
+    fn builds_deno_command_with_script() {
+        let mut config = spawn_config();
+        config.runtime = Some("deno".to_string());
+        config.script = Some("main.ts".to_string());
+
+        let (program, args) = build_spawn_program(&config).unwrap();
+
+        assert_eq!(program, "deno");
+        assert_eq!(args, vec!["run", "-A", "main.ts"]);
+    }
+
+    #[test]
+    fn builds_node_command_with_script_and_extra_args() {
+        let mut config = spawn_config();
+        config.runtime = Some("node".to_string());
+        config.script = Some("server.mjs".to_string());
+        config.args = Some(vec!["--port".to_string(), "8080".to_string()]);
+
+        let (program, args) = build_spawn_program(&config).unwrap();
+
+        assert_eq!(program, "node");
+        assert_eq!(args, vec!["server.mjs", "--port", "8080"]);
+    }
+
+    #[test]
+    fn builds_direct_command_path() {
+        let mut config = spawn_config();
+        config.command = Some("/usr/local/bin/custom".to_string());
+        config.args = Some(vec!["--flag".to_string()]);
+
+        let (program, args) = build_spawn_program(&config).unwrap();
+
+        assert_eq!(program, "/usr/local/bin/custom");
+        assert_eq!(args, vec!["--flag"]);
+    }
+
+    #[test]
+    fn builds_sidecar_command_with_extra_args() {
+        let mut config = spawn_config();
+        config.sidecar = Some("worker".to_string());
+        config.args = Some(vec!["--flag".to_string()]);
+
+        let (program, args) = build_sidecar_spawn_program("/app/worker".to_string(), &config);
+
+        assert_eq!(program, "/app/worker");
+        assert_eq!(args, vec!["--flag"]);
+    }
+
+    #[test]
+    fn sidecar_candidates_include_plain_and_triple_names() {
+        let dir = std::path::PathBuf::from("/opt/app");
+        let candidates = sidecar_candidate_paths(&dir, "my-worker", "aarch64-apple-darwin");
+        let rendered: Vec<String> = candidates
+            .iter()
+            .map(|p| p.to_string_lossy().to_string())
+            .collect();
+        assert!(rendered.contains(&"/opt/app/my-worker".to_string()));
+        assert!(rendered.contains(&"/opt/app/my-worker-aarch64-apple-darwin".to_string()));
+    }
+
+    #[test]
+    fn sidecar_candidates_canonical_order_is_plain_first() {
+        let dir = std::path::PathBuf::from("/opt/app");
+        let candidates = sidecar_candidate_paths(&dir, "w", "x86_64-unknown-linux-gnu");
+        assert_eq!(candidates[0].to_string_lossy().to_string(), "/opt/app/w");
+    }
+
+    #[test]
+    fn runtime_override_replaces_program() {
+        let program = "bun".to_string();
+        let overrides = std::collections::HashMap::from([(
+            "bun".to_string(),
+            "/opt/homebrew/bin/bun".to_string(),
+        )]);
+
+        let resolved = resolve_program_with_override(Some("bun"), program, &overrides);
+
+        assert_eq!(resolved, "/opt/homebrew/bin/bun");
+    }
+
+    #[test]
+    fn runtime_override_passthrough_when_missing() {
+        let program = "deno".to_string();
+        let overrides = std::collections::HashMap::new();
+
+        let resolved = resolve_program_with_override(Some("deno"), program.clone(), &overrides);
+
+        assert_eq!(resolved, program);
+    }
+
+    #[test]
+    fn rejects_unknown_runtime() {
+        let mut config = spawn_config();
+        config.runtime = Some("qjs".to_string());
+
+        let error = build_spawn_program(&config).unwrap_err();
+
+        match error {
+            crate::Error::InvalidConfig(message) => assert!(message.contains("qjs")),
+            other => panic!("expected InvalidConfig, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn rejects_missing_spawn_target() {
+        let error = build_spawn_program(&spawn_config()).unwrap_err();
+
+        match error {
+            crate::Error::InvalidConfig(message) => {
+                assert_eq!(
+                    message,
+                    "either 'sidecar', 'command', or 'runtime' must be specified"
+                );
+            }
+            other => panic!("expected InvalidConfig, got {other:?}"),
+        }
     }
 }
