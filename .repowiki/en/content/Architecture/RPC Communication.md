@@ -18,7 +18,7 @@
 
 ## Overview
 
-tauri-plugin-js uses [kkrpc](https://github.com/nicepkg/kkrpc) for type-safe bidirectional RPC between the frontend webview and backend JS processes. The Rust plugin acts as a transparent relay, forwarding raw bytes between the two sides.
+tauri-plugin-js uses [kkrpc](https://github.com/kunkunsh/kkrpc) for type-safe bidirectional RPC between the frontend webview and backend JS processes. The Rust plugin acts as a transparent relay, forwarding raw bytes between the two sides.
 
 ```mermaid
 graph LR

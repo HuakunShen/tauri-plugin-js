@@ -4,7 +4,7 @@
 [![crates.io](https://img.shields.io/crates/v/tauri-plugin-js.svg)](https://crates.io/crates/tauri-plugin-js)
 [![npm package](https://img.shields.io/npm/v/tauri-plugin-js-api.svg)](https://www.npmjs.com/package/tauri-plugin-js-api)
 
-A Tauri v2 plugin that spawns and manages JavaScript runtime processes (Bun, Node.js, Deno) from your desktop app. Rust manages process lifecycles and relays stdio via Tauri events. The frontend communicates with backend JS processes through type-safe RPC powered by [kkrpc](https://github.com/nicepkg/kkrpc).
+A Tauri v2 plugin that spawns and manages JavaScript runtime processes (Bun, Node.js, Deno) from your desktop app. Rust manages process lifecycles and relays stdio via Tauri events. The frontend communicates with backend JS processes through type-safe RPC powered by [kkrpc](https://github.com/kunkunsh/kkrpc).
 
 ## Why
 

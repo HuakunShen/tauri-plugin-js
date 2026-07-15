@@ -18,7 +18,7 @@
 
 ## Introduction
 
-**tauri-plugin-js** is a Tauri v2 plugin that spawns and manages JavaScript runtime processes (Bun, Node.js, Deno) from desktop applications. The Rust backend manages process lifecycles and relays stdio via Tauri events, while the frontend communicates with backend JS processes through type-safe RPC powered by [kkrpc](https://github.com/nicepkg/kkrpc).
+**tauri-plugin-js** is a Tauri v2 plugin that spawns and manages JavaScript runtime processes (Bun, Node.js, Deno) from desktop applications. The Rust backend manages process lifecycles and relays stdio via Tauri events, while the frontend communicates with backend JS processes through type-safe RPC powered by [kkrpc](https://github.com/kunkunsh/kkrpc).
 
 This plugin bridges the gap between Tauri's lightweight webview shell and scenarios requiring a full JavaScript runtime: filesystem watchers, native modules, long-running compute, local AI inference, dev servers, and more — without the weight of Electron.
 

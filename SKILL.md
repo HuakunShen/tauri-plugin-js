@@ -537,6 +537,6 @@ await spawn("worker", { runtime: "bun", script });
 
 ## References
 
-- [kkrpc](https://github.com/nicepkg/kkrpc) — cross-runtime RPC library
+- [kkrpc](https://github.com/kunkunsh/kkrpc) — cross-runtime RPC library
 - [Tauri v2 Plugin Guide](https://tauri.app/develop/plugins/)
 - [Tauri v2 Capabilities](https://tauri.app/security/capabilities/)
