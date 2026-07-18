@@ -578,7 +578,7 @@
 
     <!-- Modal -->
     <div
-      class="relative bg-background border border-border rounded-lg shadow-2xl w-[520px] max-h-[80vh] overflow-y-auto"
+      class="relative bg-background text-text font-mono border border-border rounded-lg shadow-2xl w-[520px] max-h-[80vh] overflow-y-auto"
     >
       <div
         class="px-6 py-4 border-b border-border flex items-center justify-between"
