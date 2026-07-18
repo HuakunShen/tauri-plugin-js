@@ -1,6 +1,6 @@
 [package]
 name = "tauri-plugin-js"
-version = "0.1.0"
+version = "0.2.0"
 authors = [ "Huakun" ]
 description = "Bring Node/Bun/Deno to Tauri apps with full Type Safety (kkrpc)"
 edition = "2021"

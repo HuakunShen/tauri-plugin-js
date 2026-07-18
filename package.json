@@ -1,6 +1,6 @@
 {
   "name": "tauri-plugin-js-api",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "repository": "https://github.com/huakunshen/tauri-plugin-js",
   "author": "Huakun",
   "description": "Bring Node/Bun/Deno to Tauri apps with full Type Safety (kkrpc)",
