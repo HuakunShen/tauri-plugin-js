@@ -1,4 +1,5 @@
-import { RPCChannel, NodeIo } from "kkrpc";
+import { expose } from "kkrpc";
+import { nodeStdioTransport } from "kkrpc/stdio";
 
 function fibonacci(n) {
   if (n <= 1) return n;
@@ -25,5 +26,4 @@ const api = {
   },
 };
 
-const io = new NodeIo(process.stdin, process.stdout);
-const channel = new RPCChannel(io, { expose: api });
+expose(api, nodeStdioTransport());

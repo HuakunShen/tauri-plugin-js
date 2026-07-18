@@ -1,7 +1,7 @@
 {
   "version": "5",
   "specifiers": {
-    "npm:kkrpc@*": "0.6.7_typescript@5.9.3"
+    "npm:kkrpc@^2.1.0": "2.1.0_typescript@6.0.3"
   },
   "npm": {
     "copy-anything@4.0.5": {
@@ -13,8 +13,8 @@
     "is-what@5.5.0": {
       "integrity": "sha512-oG7cgbmg5kLYae2N5IVd3jm2s+vldjxJzK1pcu9LfpGuQ93MQSzo0okvRna+7y5ifrD+20FE8FvjusyGaz14fw=="
     },
-    "kkrpc@0.6.7_typescript@5.9.3": {
-      "integrity": "sha512-bmqGY+pMGWVElcW9XhKaOprCa041as2gzuIUJsPg5+V+VMg96PUXH5WMVzcpVYKN3BLtt+AKIN6lmb7rjH/KRw==",
+    "kkrpc@2.1.0_typescript@6.0.3": {
+      "integrity": "sha512-ijiqw6g83paCFtwN9vjp093F4VUKuq5PT6C9VoCgRqlUGefCYR1LIVzC+4MNodB+sXfjO9z3cM4aeC2QDYIFGQ==",
       "dependencies": [
         "superjson",
         "typescript"
@@ -26,14 +26,14 @@
         "copy-anything"
       ]
     },
-    "typescript@5.9.3": {
-      "integrity": "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw==",
+    "typescript@6.0.3": {
+      "integrity": "sha512-y2TvuxSZPDyQakkFRPZHKFm+KKVqIisdg9/CZwm9ftvKXLP8NRWj38/ODjNbr43SsoXqNuAisEf1GdCxqWcdBw==",
       "bin": true
     }
   },
   "workspace": {
     "dependencies": [
-      "npm:kkrpc@*"
+      "npm:kkrpc@^2.1.0"
     ]
   }
 }

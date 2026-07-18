@@ -1,4 +1,5 @@
-import { DenoIo, RPCChannel } from "kkrpc/deno";
+import { expose, stdioJsonTransport } from "kkrpc/deno";
+import process from "node:process";
 import type { BackendAPI } from "./shared-api.ts";
 
 function fibonacci(n: number): number {
@@ -26,5 +27,4 @@ const api: BackendAPI = {
   },
 };
 
-const io = new DenoIo(Deno.stdin.readable);
-const channel = new RPCChannel(io, { expose: api });
+expose(api, stdioJsonTransport({ readable: process.stdin, writable: process.stdout }));

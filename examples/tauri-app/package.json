@@ -14,7 +14,7 @@
   "dependencies": {
     "@tauri-apps/api": "^2.0.0",
     "tauri-plugin-js-api": "link:../../",
-    "kkrpc": "^0.6.0",
+    "kkrpc": "^2.1.0",
     "mode-watcher": "^0.5.0"
   },
   "devDependencies": {

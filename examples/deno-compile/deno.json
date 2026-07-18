@@ -1,5 +1,5 @@
 {
   "imports": {
-    "kkrpc/deno": "npm:kkrpc/deno"
+    "kkrpc/deno": "npm:kkrpc@^2.1.0/deno"
   }
 }

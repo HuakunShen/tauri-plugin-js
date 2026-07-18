@@ -40,8 +40,8 @@ On app exit, it force-cleans all child processes in the plugin event hook (`src/
 
 Two subtle but critical details are implemented in `guest-js/index.ts`:
 
-- **Newline framing restoration:** Rust uses `BufReader::lines()` (`src/desktop.rs`), which strips trailing `\n`. The JS adapter re-appends `\n` before handing messages to kkrpc.
-- **No spin-loop on teardown:** `JsRuntimeIo.read()` returns a never-resolving promise when destroyed, paired with `isDestroyed` semantics used by kkrpc's channel loop. This prevents CPU spin when a channel is torn down.
+- **Newline framing:** Rust uses `BufReader::lines()` (`src/desktop.rs`), which strips trailing `\n`. The frontend transport uses kkrpc's `jsonLineCodec`, whose decoder tolerates the missing newline, so each stdout event maps to one RPC frame.
+- **Close propagation:** the transport wires `js-process-exit` into kkrpc's `onClose` hook, so pending RPC calls reject promptly when the child process dies instead of waiting for timeouts.
 
 These are exactly the kind of tiny transport bugs that make IPC feel flaky in real apps.
 
@@ -118,7 +118,7 @@ Because process events are emitted through Tauri's event system and process name
 1. Frontend calls `spawn(name, config)` via wrapper in `guest-js/index.ts`.
 2. Rust plugin launches child process and stores process entry in map (`src/desktop.rs`).
 3. Rust emits stdout/stderr/exit events (`js-process-stdout`, `js-process-stderr`, `js-process-exit`).
-4. Frontend `JsRuntimeIo` listens to process-specific events and feeds kkrpc transport.
+4. Frontend `jsRuntimeTransport` listens to process-specific events and feeds the kkrpc channel.
 5. `createChannel` returns typed remote API proxy.
 6. UI calls `api.add`, `api.echo`, `api.getSystemInfo`, `api.fibonacci` (`examples/tauri-app/src/App.svelte`).
 

@@ -1,4 +1,4 @@
-import { type IoInterface, type IoMessage } from "kkrpc/browser";
+import type { RPCChannel, RPCMessage, Transport } from "kkrpc/browser";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 
@@ -126,101 +126,79 @@ export function onExit(
   });
 }
 
-// ── C) JsRuntimeIo class (kkrpc IoInterface via structural typing) ──
+// ── C) Native kkrpc transport over the process's stdio ──
 
-type MessageListener = (data: string) => void;
+export async function jsRuntimeTransport(
+  processName: string,
+): Promise<Transport<RPCMessage>> {
+  const [{ createTransport }, { jsonLineCodec }] = await Promise.all([
+    import("kkrpc/transport"),
+    import("kkrpc/codecs"),
+  ]);
 
-export class JsRuntimeIo implements IoInterface {
-  readonly name: string;
-  private processName: string;
-  private queue: string[] = [];
-  private waitResolve: ((value: string | null) => void) | null = null;
-  private listeners: Set<MessageListener> = new Set();
-  private unlisten: UnlistenFn | null = null;
-  private _isDestroyed = false;
+  const messageListeners = new Set<(wire: string) => void>();
+  const closeListeners = new Set<(reason?: Error) => void>();
+  let exited = false;
+  let exitReason: Error | undefined;
 
-  constructor(processName: string) {
-    this.processName = processName;
-    this.name = `tauri-js-runtime:${processName}`;
-  }
+  // Rust's BufReader::lines() strips the trailing \n; jsonLineCodec's decode
+  // tolerates that, so each stdout event forwards as one wire frame.
+  const unlistenStdout = await listen<StdioEventPayload>(
+    "js-process-stdout",
+    (event) => {
+      if (event.payload.name !== processName) return;
+      for (const listener of messageListeners) {
+        listener(event.payload.data);
+      }
+    },
+  );
 
-  get isDestroyed(): boolean {
-    return this._isDestroyed;
-  }
+  const unlistenExit = await listen<ExitEventPayload>(
+    "js-process-exit",
+    (event) => {
+      if (event.payload.name !== processName || exited) return;
+      exited = true;
+      exitReason =
+        event.payload.code === 0
+          ? undefined
+          : new Error(
+              `process "${processName}" exited with code ${event.payload.code}`,
+            );
+      for (const listener of closeListeners) {
+        listener(exitReason);
+      }
+      closeListeners.clear();
+    },
+  );
 
-  async initialize(): Promise<void> {
-    this.unlisten = await listen<StdioEventPayload>(
-      "js-process-stdout",
-      (event) => {
-        if (event.payload.name !== this.processName) return;
-        if (this._isDestroyed) return;
-
-        // Re-append the newline that BufReader::lines() strips
-        const data = event.payload.data + "\n";
-
-        // Dispatch to message listeners
-        for (const listener of this.listeners) {
-          listener(data);
-        }
-
-        // Feed the read queue
-        if (this.waitResolve) {
-          const resolve = this.waitResolve;
-          this.waitResolve = null;
-          resolve(data);
-        } else {
-          this.queue.push(data);
-        }
+  return createTransport<RPCMessage, string>({
+    platform: {
+      send: (wire) => writeStdin(processName, wire),
+      subscribe(listener) {
+        messageListeners.add(listener);
+        return () => {
+          messageListeners.delete(listener);
+        };
       },
-    );
-  }
-
-  async write(data: string): Promise<void> {
-    await writeStdin(this.processName, data);
-  }
-
-  async read(): Promise<string | null> {
-    if (this._isDestroyed) {
-      // Return a never-resolving promise so kkrpc's listen loop hangs
-      return new Promise<string | null>(() => {});
-    }
-
-    if (this.queue.length > 0) {
-      return this.queue.shift()!;
-    }
-
-    return new Promise<string | null>((resolve) => {
-      this.waitResolve = resolve;
-    });
-  }
-
-  on(event: "message", listener: (message: string | IoMessage) => void): void;
-  on(event: "error", listener: (error: Error) => void): void;
-  on(event: string, listener: Function): void {
-    if (event === "message") {
-      this.listeners.add(listener as MessageListener);
-    }
-  }
-
-  off(event: "message" | "error", listener: Function): void {
-    if (event === "message") {
-      this.listeners.delete(listener as MessageListener);
-    }
-  }
-
-  async destroy(): Promise<void> {
-    this._isDestroyed = true;
-    if (this.unlisten) {
-      this.unlisten();
-      this.unlisten = null;
-    }
-    if (this.waitResolve) {
-      this.waitResolve(null);
-      this.waitResolve = null;
-    }
-    this.listeners.clear();
-    this.queue = [];
-  }
+      close() {
+        unlistenStdout();
+        unlistenExit();
+        messageListeners.clear();
+        closeListeners.clear();
+      },
+      onClose(listener) {
+        if (exited) {
+          queueMicrotask(() => listener(exitReason));
+          return () => {};
+        }
+        closeListeners.add(listener);
+        return () => {
+          closeListeners.delete(listener);
+        };
+      },
+    },
+    codec: jsonLineCodec<RPCMessage>(),
+  });
 }
 
 // ── D) Channel helper (dynamic kkrpc import) ──
@@ -232,16 +210,15 @@ export async function createChannel<
   processName: string,
   localApi?: LocalAPI,
 ): Promise<{
-  channel: any;
+  channel: RPCChannel<LocalAPI, RemoteAPI>;
   api: RemoteAPI;
-  io: JsRuntimeIo;
+  transport: Transport<RPCMessage>;
 }> {
   const { RPCChannel } = await import("kkrpc/browser");
-  const io = new JsRuntimeIo(processName);
-  await io.initialize();
-  const channel = new RPCChannel<LocalAPI, RemoteAPI>(io, {
+  const transport = await jsRuntimeTransport(processName);
+  const channel = new RPCChannel<LocalAPI, RemoteAPI>(transport, {
     expose: localApi ?? ({} as LocalAPI),
   });
   const api = channel.getAPI();
-  return { channel, api: api as RemoteAPI, io };
+  return { channel, api: api as RemoteAPI, transport };
 }

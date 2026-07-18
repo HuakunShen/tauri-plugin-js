@@ -24,7 +24,7 @@ A Tauri v2 plugin that spawns and manages JavaScript runtime processes (Bun, Nod
 │   ├── error.rs          # Error enum + thiserror
 │   └── mobile.rs         # Mobile stub (not implemented)
 ├── guest-js/             # Frontend npm package
-│   └── index.ts          # API + JsRuntimeIo (kkrpc adapter)
+│   └── index.ts          # API + jsRuntimeTransport (native kkrpc transport)
 ├── permissions/          # Tauri v2 permission system
 ├── examples/             # Demo tauri-app
 └── vendors/kkrpc/        # RPC library (separate project)
@@ -40,7 +40,7 @@ A Tauri v2 plugin that spawns and manages JavaScript runtime processes (Bun, Nod
 | Event types | `src/models.rs` | Use `#[serde(rename_all = "camelCase")]` |
 | Process spawn/kill | `src/desktop.rs` `Js` struct | Uses `tokio::process::Command` |
 | Frontend API | `guest-js/index.ts` | Tauri invoke wrappers + event helpers |
-| kkrpc IO adapter | `guest-js/index.ts` `JsRuntimeIo` | Bridges Tauri events ↔ kkrpc |
+| kkrpc transport | `guest-js/index.ts` `jsRuntimeTransport` | Bridges Tauri events ↔ kkrpc |
 | Permissions | `permissions/default.toml` | Tauri v2 capability system |
 | Build config | `build.rs` | Command list for tauri-plugin |
 
@@ -55,8 +55,8 @@ A Tauri v2 plugin that spawns and manages JavaScript runtime processes (Bun, Nod
 | `spawn` | Command | `commands.rs:10` | Start named JS runtime process |
 | `kill` / `kill_all` | Command | `commands.rs:19,24` | Terminate processes |
 | `write_stdin` | Command | `commands.rs:48` | Send data to process stdin |
-| `JsRuntimeIo` | Class | `guest-js:133` | kkrpc IoInterface implementation |
-| `createChannel` | Function | `guest-js:228` | Helper to create typed RPC channel |
+| `jsRuntimeTransport` | Function | `guest-js:131` | Native kkrpc `Transport<RPCMessage>` over Tauri events |
+| `createChannel` | Function | `guest-js:206` | Helper to create typed RPC channel |
 | `Error` | Enum | `error.rs:6` | thiserror-based errors, serializable |
 
 ---
@@ -73,10 +73,10 @@ A Tauri v2 plugin that spawns and manages JavaScript runtime processes (Bun, Nod
 
 ### TypeScript
 
-- **Event filtering:** By process name: `if (event.payload.name !== this.processName) return`
-- **Newline handling:** Re-append `\n` stripped by Rust `BufReader::lines()`
-- **Destroy guard:** `isDestroyed` prevents spin loops; `read()` returns never-resolving promise when destroyed
-- **Dynamic import:** `kkrpc/browser` loaded on-demand in `createChannel()`
+- **Event filtering:** By process name: `if (event.payload.name !== processName) return`
+- **Newline handling:** `jsonLineCodec` appends `\n` on encode; its decoder tolerates the `\n` that Rust's `BufReader::lines()` strips
+- **Close propagation:** `js-process-exit` feeds the transport's `onClose` hook so pending RPC calls reject
+- **Dynamic import:** kkrpc entries loaded on-demand in `jsRuntimeTransport()`/`createChannel()` (kkrpc is an optional peer dep)
 
 ### Tauri Patterns
 
@@ -89,10 +89,10 @@ A Tauri v2 plugin that spawns and manages JavaScript runtime processes (Bun, Nod
 ## ANTI-PATTERNS (THIS PROJECT)
 
 - ❌ **Do not parse RPC in Rust** — Rust is a thin relay; never parse JSON payloads
-- ❌ **Do not forget `\n`** — `BufReader::lines()` strips newlines; frontend MUST re-append for kkrpc
+- ❌ **Do not strip framing on send** — outgoing frames must stay newline-delimited (`jsonLineCodec` handles this)
 - ❌ **Do not hold mutex across await** — Take data out of lock before `.await`
 - ❌ **Do not drop stdin before taking** — `entry.stdin.take()` then `child.kill()`
-- ❌ **Do not block kkrpc read() with null** — Return never-resolving promise when destroyed
+- ❌ **Do not use removed kkrpc classic APIs** — `IoInterface`/`*Io` classes are gone in kkrpc ≥2.1.0; use native `Transport<RPCMessage>`
 
 ---
 
@@ -112,14 +112,13 @@ Production: `{name}` (bundler strips triple)
 Development: `{name}-{TARGET_TRIPLE}` (from `build.rs` env)  
 Windows: Also checks `.exe` variants
 
-### JsRuntimeIo Message Queue
+### jsRuntimeTransport Composition
 
 ```typescript
-private queue: string[] = [];
-private waitResolve: ((value: string | null) => void) | null = null;
+createTransport({ platform, codec: jsonLineCodec() })
 ```
 
-Supports both push (listener) and pull (read promise) patterns for Tauri event → kkrpc adapter.
+The platform forwards `js-process-stdout` event lines to subscribers, writes via `writeStdin`, and reports `js-process-exit` through the transport's `onClose` hook so pending RPC calls reject when the child dies.
 
 ---
 
@@ -145,7 +144,7 @@ pnpm tauri dev          # Runs with dev mode runtime detection
 ### kkrpc Integration
 
 - **Browser entry:** Use `kkrpc/browser` (not `kkrpc`) for webview
-- **IO adapter:** `JsRuntimeIo` implements `IoInterface` structurally (no explicit `implements`)
+- **Transport:** `jsRuntimeTransport()` returns a native `Transport<RPCMessage>` built with `createTransport()` + `jsonLineCodec()` (kkrpc ≥2.1.0)
 - **Newline protocol:** Critical for message framing — see ANTI-PATTERNS
 
 ### Process Lifecycle

@@ -56,6 +56,17 @@ cd examples/tauri-app
 pnpm tauri dev
 ```
 
+## When to recompile
+
+Compiled sidecars and bundled workers inline their dependencies (including kkrpc) at build time, so they go stale silently — the spawn buttons will run old code until you rebuild them.
+
+| What changed | What to run |
+|--------------|-------------|
+| `guest-js/index.ts` (plugin frontend) | `pnpm build` at the plugin root (then `rm -rf node_modules/.vite` here if Vite serves a stale copy) |
+| Rust plugin (`src/`) | Nothing — `pnpm tauri dev` recompiles automatically |
+| Worker source (`backends/`, `examples/deno-compile/`) | Dev-mode spawn buttons: nothing (run from source). Sidecar buttons: `pnpm build:sidecars`. Production build: `pnpm build:workers` |
+| kkrpc version (or other worker deps) | `pnpm install`, then `pnpm build:sidecars` **and** `pnpm build:workers` — both bake kkrpc in |
+
 ## How it works
 
 ```mermaid
@@ -67,9 +78,9 @@ graph TB
     end
 
     subgraph "Backend Workers"
-        BUN["bun-worker.ts<br/>BunIo + RPCChannel"]
-        NODE["node-worker.mjs<br/>NodeIo + RPCChannel"]
-        DENO["deno-worker.ts<br/>DenoIo + RPCChannel"]
+        BUN["bun-worker.ts<br/>expose + nodeStdioTransport"]
+        NODE["node-worker.mjs<br/>expose + nodeStdioTransport"]
+        DENO["deno-worker.ts<br/>expose + stdioJsonTransport"]
     end
 
     SHARED["shared-api.ts<br/>BackendAPI type"]
@@ -121,7 +132,7 @@ Two buttons for spawning pre-compiled standalone binaries via Tauri's sidecar me
 - `bun-worker (sidecar)` — compiled from `bun-worker.ts` via `bun build --compile`
 - `deno-worker (sidecar)` — compiled from `deno-worker.ts` via `deno compile`
 
-These use `config.sidecar` (Tauri sidecar resolution) instead of `config.runtime`. The plugin resolves sidecars by looking next to the app executable, trying both plain names (production) and target-triple-suffixed names (development). The worker code is identical — `Bun.stdin.stream()` and `Deno.stdin.readable` work the same in compiled binaries, so kkrpc and all RPC calls work unchanged.
+These use `config.sidecar` (Tauri sidecar resolution) instead of `config.runtime`. The plugin resolves sidecars by looking next to the app executable, trying both plain names (production) and target-triple-suffixed names (development). The worker code is identical — the stdio streams behave the same in compiled binaries, so kkrpc and all RPC calls work unchanged.
 
 Run `pnpm build:sidecars` to compile the binaries before using these buttons.
 
@@ -160,9 +171,9 @@ examples/
   tauri-app/
     backends/
       shared-api.ts     # BackendAPI type definition (shared between frontend + workers)
-      bun-worker.ts     # Bun worker using kkrpc BunIo
-      node-worker.mjs   # Node worker using kkrpc NodeIo
-      deno-worker.ts    # Deno worker using kkrpc DenoIo (dev mode only)
+      bun-worker.ts     # Bun worker using kkrpc nodeStdioTransport
+      node-worker.mjs   # Node worker using kkrpc nodeStdioTransport
+      deno-worker.ts    # Deno worker using kkrpc stdioJsonTransport (dev mode only)
     scripts/
       build-sidecars.sh # Compiles bun-worker + deno-worker into standalone binaries
       build-workers.sh  # Bundles worker scripts with kkrpc inlined for production

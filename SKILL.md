@@ -43,7 +43,7 @@ Frontend (Webview)  <-- Tauri Events -->  Rust Core  <-- stdio -->  JS Runtime
 - **Rust** spawns child processes, pipes their stdin/stdout/stderr, and relays data via Tauri events
 - **Rust never parses RPC payloads** — it forwards raw newline-delimited strings
 - **kkrpc** handles the RPC protocol on both ends (frontend webview + backend runtime)
-- **Frontend IO adapter** bridges Tauri events to kkrpc's IoInterface (read/write/on/off)
+- **Frontend transport** bridges Tauri events to a native kkrpc `Transport<RPCMessage>` (`jsRuntimeTransport`)
 - **Multi-window** works because all windows receive the same Tauri events; kkrpc request IDs handle routing
 
 ## Approach A: Using tauri-plugin-js (Recommended)
@@ -106,11 +106,12 @@ export interface BackendAPI {
 
 ### Step 5: Write backend workers
 
-Each runtime has its own IO adapter from kkrpc:
+Each runtime uses kkrpc's native stdio transports (kkrpc ≥2.1.0):
 
 **Bun** (`backends/bun-worker.ts`):
 ```typescript
-import { RPCChannel, BunIo } from "kkrpc";
+import { expose } from "kkrpc";
+import { nodeStdioTransport } from "kkrpc/stdio";
 import type { BackendAPI } from "./shared-api";
 
 const api: BackendAPI = {
@@ -121,13 +122,13 @@ const api: BackendAPI = {
   },
 };
 
-const io = new BunIo(Bun.stdin.stream());
-const channel = new RPCChannel(io, { expose: api });
+expose(api, nodeStdioTransport());
 ```
 
 **Node** (`backends/node-worker.mjs`):
 ```javascript
-import { RPCChannel, NodeIo } from "kkrpc";
+import { expose } from "kkrpc";
+import { nodeStdioTransport } from "kkrpc/stdio";
 
 const api = {
   async add(a, b) { return a + b; },
@@ -137,13 +138,13 @@ const api = {
   },
 };
 
-const io = new NodeIo(process.stdin, process.stdout);
-const channel = new RPCChannel(io, { expose: api });
+expose(api, nodeStdioTransport());
 ```
 
 **Deno** (`backends/deno-worker.ts`):
 ```typescript
-import { DenoIo, RPCChannel } from "npm:kkrpc/deno";
+import { expose, stdioJsonTransport } from "npm:kkrpc@^2.1.0/deno";
+import process from "node:process";
 import type { BackendAPI } from "./shared-api.ts";  // .ts extension required by Deno
 
 const api: BackendAPI = {
@@ -154,8 +155,7 @@ const api: BackendAPI = {
   },
 };
 
-const io = new DenoIo(Deno.stdin.readable);
-const channel = new RPCChannel(io, { expose: api });
+expose(api, stdioJsonTransport({ readable: process.stdin, writable: process.stdout }));
 ```
 
 ### Step 6: Frontend — spawn and call
@@ -343,61 +343,40 @@ app.listen("frontend-to-runtime", move |event| {
 });
 ```
 
-### Step 2: Frontend IO adapter
+### Step 2: Frontend transport
 
-Bridge Tauri events to kkrpc's IoInterface:
+Bridge Tauri events to a native kkrpc `Transport<RPCMessage>`:
 ```typescript
-import { emit, listen, type UnlistenFn } from "@tauri-apps/api/event";
+import { emit, listen } from "@tauri-apps/api/event";
+import type { RPCMessage, Transport } from "kkrpc/browser";
+import { createTransport } from "kkrpc/transport";
+import { jsonLineCodec } from "kkrpc/codecs";
 
-export class TauriEventIo {
-  name = "tauri-event-io";
-  isDestroyed = false;
-  private listeners: Set<(msg: string) => void> = new Set();
-  private queue: string[] = [];
-  private pendingReads: Array<(value: string | null) => void> = [];
-  private unlisten: UnlistenFn | null = null;
+export async function tauriEventTransport(): Promise<Transport<RPCMessage>> {
+  const listeners = new Set<(wire: string) => void>();
 
-  async initialize(): Promise<void> {
-    this.unlisten = await listen<string>("runtime-stdout", (event) => {
-      // CRITICAL: re-append \n that BufReader::lines() strips
-      const message = event.payload + "\n";
+  const unlisten = await listen<string>("runtime-stdout", (event) => {
+    // BufReader::lines() strips \n; jsonLineCodec's decoder tolerates that,
+    // so each event forwards as one wire frame
+    for (const listener of listeners) listener(event.payload);
+  });
 
-      for (const listener of this.listeners) listener(message);
-
-      if (this.pendingReads.length > 0) {
-        this.pendingReads.shift()!(message);
-      } else {
-        this.queue.push(message);
-      }
-    });
-  }
-
-  async read(): Promise<string | null> {
-    if (this.isDestroyed) return new Promise(() => {});  // hang, don't spin
-    if (this.queue.length > 0) return this.queue.shift()!;
-    return new Promise((resolve) => this.pendingReads.push(resolve));
-  }
-
-  async write(message: string): Promise<void> {
-    await emit("frontend-to-runtime", message);
-  }
-
-  on(event: "message" | "error", listener: (msg: string) => void) {
-    if (event === "message") this.listeners.add(listener);
-  }
-
-  off(event: "message" | "error", listener: Function) {
-    if (event === "message") this.listeners.delete(listener as any);
-  }
-
-  destroy() {
-    this.isDestroyed = true;
-    this.unlisten?.();
-    this.pendingReads.forEach((r) => r(null));
-    this.pendingReads = [];
-    this.queue = [];
-    this.listeners.clear();
-  }
+  return createTransport<RPCMessage, string>({
+    platform: {
+      send: (wire) => emit("frontend-to-runtime", wire),
+      subscribe(listener) {
+        listeners.add(listener);
+        return () => {
+          listeners.delete(listener);
+        };
+      },
+      close() {
+        unlisten();
+        listeners.clear();
+      },
+    },
+    codec: jsonLineCodec<RPCMessage>(),
+  });
 }
 ```
 
@@ -407,10 +386,9 @@ export class TauriEventIo {
 import { RPCChannel } from "kkrpc/browser";
 import type { BackendAPI } from "../backend/types";
 
-const io = new TauriEventIo();
-await io.initialize();
+const transport = await tauriEventTransport();
 
-const channel = new RPCChannel<{}, BackendAPI>(io, { expose: {} });
+const channel = new RPCChannel<{}, BackendAPI>(transport, { expose: {} });
 const api = channel.getAPI() as BackendAPI;
 
 // Type-safe calls
@@ -457,13 +435,13 @@ Note: `WebviewWindow` from `@tauri-apps/api/webviewWindow` requires `core:webvie
 ## Critical Pitfalls
 
 ### 1. Newline framing
-Rust's `BufReader::lines()` strips trailing `\n`. kkrpc (and all newline-delimited JSON protocols) need `\n` to delimit messages. **The frontend IO adapter MUST re-append `\n`** to every payload received from Tauri events.
+Rust's `BufReader::lines()` strips trailing `\n`. On the wire, messages must stay newline-delimited. Use kkrpc's `jsonLineCodec` — it appends `\n` on encode and its decoder tolerates the stripped newline, so each Tauri stdout event maps to one RPC frame.
 
-### 2. kkrpc read loop spin
-kkrpc's internal `listen()` loop continues on `null` reads — it only stops if the IO adapter has `isDestroyed === true`. If `read()` returns `null` without `isDestroyed` being set, the loop spins at 100% CPU. **Solution:** `read()` should return a never-resolving promise when destroyed, and expose `isDestroyed`.
+### 2. Close propagation
+Wire the process-exit event into the transport platform's `onClose` hook. Without it, RPC calls pending when the child dies hang until their timeouts instead of rejecting promptly.
 
 ### 3. Channel cleanup
-Call `channel.destroy()` (not just `io.destroy()`) to properly reject pending RPC promises. The channel's destroy will call io.destroy internally.
+Call `channel.destroy()` (not just `transport.close()`) to properly reject pending RPC promises. The channel's destroy closes the transport internally.
 
 ### 4. Mutex contention in Rust
 The Tauri event listener for stdin writes and the kill/restart commands both need the process mutex. **Take the process handle out of the lock scope before kill/wait.** Drop stdin first to unblock pending writes.

@@ -29,9 +29,9 @@ graph LR
         RS["Rust Plugin<br/>tauri-plugin-js"]
     end
     subgraph Child Processes
-        B["Bun Worker<br/>kkrpc BunIo"]
-        N["Node Worker<br/>kkrpc NodeIo"]
-        D["Deno Worker<br/>kkrpc DenoIo"]
+        B["Bun Worker<br/>kkrpc stdio transport"]
+        N["Node Worker<br/>kkrpc stdio transport"]
+        D["Deno Worker<br/>kkrpc stdio transport"]
     end
     FE <-->|"Tauri Events<br/>(js-process-stdout/stderr)"| RS
     RS <-->|"stdin / stdout"| B
@@ -56,7 +56,7 @@ sequenceDiagram
     Note over FE,RT: Runtime → Frontend (RPC response)
     RT->>RS: stdout line (BufReader::lines)
     RS->>FE: emit("js-process-stdout", {name, data})
-    Note over FE: JsRuntimeIo re-appends \n<br/>kkrpc parses response
+    Note over FE: jsRuntimeTransport decodes the line<br/>kkrpc parses response
 
     Note over FE,RT: Process lifecycle
     FE->>RS: spawn(name, config)
@@ -125,7 +125,8 @@ export interface BackendAPI {
 
 **Bun** (`backends/bun-worker.ts`):
 ```typescript
-import { RPCChannel, BunIo } from "kkrpc";
+import { expose } from "kkrpc";
+import { nodeStdioTransport } from "kkrpc/stdio";
 import type { BackendAPI } from "./shared-api";
 
 const api: BackendAPI = {
@@ -136,27 +137,26 @@ const api: BackendAPI = {
   },
 };
 
-const io = new BunIo(Bun.stdin.stream());
-const channel = new RPCChannel(io, { expose: api });
+expose(api, nodeStdioTransport());
 ```
 
 **Node** (`backends/node-worker.mjs`):
 ```javascript
-import { RPCChannel, NodeIo } from "kkrpc";
+import { expose } from "kkrpc";
+import { nodeStdioTransport } from "kkrpc/stdio";
 
 const api = { /* same methods */ };
-const io = new NodeIo(process.stdin, process.stdout);
-const channel = new RPCChannel(io, { expose: api });
+expose(api, nodeStdioTransport());
 ```
 
 **Deno** (`backends/deno-worker.ts`):
 ```typescript
-import { DenoIo, RPCChannel } from "npm:kkrpc/deno";
+import { expose, stdioJsonTransport } from "npm:kkrpc@^2.1.0/deno";
+import process from "node:process";
 import type { BackendAPI } from "./shared-api.ts";
 
 const api: BackendAPI = { /* same methods, using Deno.pid, Deno.build.os, etc. */ };
-const io = new DenoIo(Deno.stdin.readable);
-const channel = new RPCChannel(io, { expose: api });
+expose(api, stdioJsonTransport({ readable: process.stdin, writable: process.stdout }));
 ```
 
 ### 3. Spawn and call from the frontend
@@ -251,7 +251,7 @@ const script = await resolveResource("workers/bun-worker.js");
 await spawn("my-worker", { runtime: "bun", script });
 ```
 
-Note: Deno workers use `npm:kkrpc/deno` which Deno resolves natively — no bundling needed, just copy the source file.
+Note: Deno workers use `npm:kkrpc@^2.1.0/deno` which Deno resolves natively — no bundling needed, just copy the source file.
 
 ### 6. Runtime detection
 
@@ -295,7 +295,9 @@ const paths = await getRuntimePaths();
 
 ### RPC Helper
 
-`createChannel<LocalAPI, RemoteAPI>(processName, localApi?)` — creates a kkrpc channel over the process's stdio, returns `{ channel, api, io }`. The `api` proxy is fully typed against `RemoteAPI`.
+`createChannel<LocalAPI, RemoteAPI>(processName, localApi?)` — creates a kkrpc channel over the process's stdio, returns `{ channel, api, transport }`. The `api` proxy is fully typed against `RemoteAPI`.
+
+`jsRuntimeTransport(processName)` — returns a native kkrpc `Transport<RPCMessage>` bridging the process's stdio over Tauri events, for use with kkrpc's `wrap()`, `expose()`, or `RPCChannel` directly.
 
 ### SpawnConfig
 
@@ -315,8 +317,8 @@ interface SpawnConfig {
 
 - **Rust is a thin relay.** It spawns processes, pipes stdio, emits events. It never parses or transforms RPC messages.
 - **RPC is end-to-end JS.** kkrpc runs in both the frontend webview and the backend runtime. Rust just forwards the bytes.
-- **Newline framing.** Rust's `BufReader::lines()` strips `\n`. The frontend `JsRuntimeIo` adapter re-appends it so kkrpc's message parser works correctly.
-- **`isDestroyed` guard.** kkrpc's listen loop continues on null reads. The IO adapter exposes `isDestroyed` and returns a never-resolving promise from `read()` when destroyed, preventing spin loops.
+- **Newline framing.** Rust's `BufReader::lines()` strips `\n`. The frontend transport uses kkrpc's `jsonLineCodec`, whose decoder tolerates the missing newline, so each stdout event maps to one RPC frame.
+- **Native transport.** The frontend implements kkrpc's `Transport<RPCMessage>` via `createTransport()`, wiring `js-process-exit` into the transport's `onClose` so pending RPC calls reject promptly when the child dies.
 
 ## Example App
 

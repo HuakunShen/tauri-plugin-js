@@ -1,4 +1,5 @@
-import { RPCChannel, BunIo } from "kkrpc";
+import { expose } from "kkrpc";
+import { nodeStdioTransport } from "kkrpc/stdio";
 import type { BackendAPI } from "./shared-api";
 
 function fibonacci(n: number): number {
@@ -26,5 +27,4 @@ const api: BackendAPI = {
   },
 };
 
-const io = new BunIo(Bun.stdin.stream());
-const channel = new RPCChannel(io, { expose: api });
+expose(api, nodeStdioTransport());
