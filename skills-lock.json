@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "skills": {
+    "kkrpc": {
+      "source": "kunkunsh/kkrpc",
+      "sourceType": "github",
+      "skillPath": "skills/kkrpc/SKILL.md",
+      "computedHash": "d67b7af4056d2ed6826aced3edc23f6719760b0112b6164574c533f00c537849"
+    },
+    "kkrpc-interop": {
+      "source": "kunkunsh/kkrpc",
+      "sourceType": "github",
+      "skillPath": "skills/interop/SKILL.md",
+      "computedHash": "0dc6eb9ad295f3c69a178cb50c6790b229463f078a9ff1b1da2b2148a2ae06ef"
+    },
+    "kkrpc-migration": {
+      "source": "kunkunsh/kkrpc",
+      "sourceType": "github",
+      "skillPath": "skills/kkrpc-migration/SKILL.md",
+      "computedHash": "58614abf975d0caa2cdc206a542291b565366451f869f9830ad1312a3034bc68"
+    }
+  }
+}

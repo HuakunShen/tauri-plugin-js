@@ -26,7 +26,7 @@
     "@tauri-apps/api": "^2.0.0"
   },
   "peerDependencies": {
-    "kkrpc": ">=0.6.0"
+    "kkrpc": ">=2.1.0"
   },
   "peerDependenciesMeta": {
     "kkrpc": {
@@ -35,7 +35,7 @@
   },
   "devDependencies": {
     "@rollup/plugin-typescript": "^12.0.0",
-    "rollup": "^4.9.6",
+    "rollup": "^4.62.2",
     "typescript": "^5.3.3",
     "tslib": "^2.6.2"
   }
